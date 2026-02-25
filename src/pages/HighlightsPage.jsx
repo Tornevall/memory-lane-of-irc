@@ -1,0 +1,168 @@
+import { useState, useEffect } from 'react';
+import { getHighlights, createHighlight, getEffectiveApiKey } from '../services/api';
+
+function getApiKey() {
+  return getEffectiveApiKey();
+}
+
+export default function HighlightsPage() {
+  const [highlights, setHighlights] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [logEventId, setLogEventId] = useState('');
+  const [title, setTitle] = useState('');
+  const [note, setNote] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
+
+  async function fetchHighlights() {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setError('Please enter and save your API key first.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getHighlights(apiKey);
+      setHighlights(data.highlights || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchHighlights();
+  }, []);
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setCreateError('Please enter and save your API key first.');
+      return;
+    }
+    setCreating(true);
+    setCreateError('');
+    setCreateSuccess('');
+    try {
+      const data = await createHighlight(apiKey, {
+        log_event_id: Number(logEventId),
+        title,
+        note,
+        is_public: isPublic,
+      });
+      setCreateSuccess(`Highlight created! ID: ${data.id}`);
+      setLogEventId('');
+      setTitle('');
+      setNote('');
+      setShowForm(false);
+      fetchHighlights();
+    } catch (err) {
+      setCreateError(err.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1>Highlights</h1>
+        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancel' : '+ New Highlight'}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="search-form highlight-form">
+          <h2>Create Highlight</h2>
+          <div className="form-row">
+            <label>Log Event ID *</label>
+            <input
+              type="number"
+              value={logEventId}
+              onChange={(e) => setLogEventId(e.target.value)}
+              placeholder="e.g. 12345"
+              required
+            />
+          </div>
+          <div className="form-row">
+            <label>Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Funny quote"
+              required
+            />
+          </div>
+          <div className="form-row">
+            <label>Note (optional)</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Additional notes..."
+              rows={3}
+            />
+          </div>
+          <div className="form-row checkbox-row">
+            <label>
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+              />
+              Public highlight
+            </label>
+          </div>
+          {createError && <div className="error-banner">{createError}</div>}
+          {createSuccess && <div className="success-banner">{createSuccess}</div>}
+          <button type="submit" className="btn-primary" disabled={creating}>
+            {creating ? 'Creating…' : 'Create Highlight'}
+          </button>
+        </form>
+      )}
+
+      {error && <div className="error-banner">{error}</div>}
+
+      <button className="btn-secondary" onClick={fetchHighlights} disabled={loading}>
+        {loading ? 'Loading…' : '↺ Refresh'}
+      </button>
+
+      {highlights.length === 0 && !loading && !error && (
+        <p className="empty-state">No highlights yet.</p>
+      )}
+
+      <div className="highlights-list">
+        {highlights.map((h) => (
+          <div key={h.id} className="highlight-card">
+            <div className="highlight-title">{h.title}</div>
+            {h.event && (
+              <div className="highlight-event">
+                <span className="nick">{h.event.nick}</span>
+                <span className="highlight-message">{h.event.message}</span>
+                <span className="date">{new Date(h.event.date).toLocaleString()}</span>
+              </div>
+            )}
+            {h.permalink && (
+              <a
+                href={`https://tools.tornevall.com${h.permalink}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="permalink"
+              >
+                Permalink ↗
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
