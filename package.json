@@ -1,0 +1,17 @@
+{
+  "name": "memory-lane-of-irc",
+  "version": "0.1.0",
+  "description": "A dynamic interface for browsing IRC memories, backed by a token-authenticated API",
+  "main": "api/server.js",
+  "scripts": {
+    "start": "node api/server.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "keywords": ["irc", "memory", "chat-logs"],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {}
+}
