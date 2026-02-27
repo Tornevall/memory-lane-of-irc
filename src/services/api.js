@@ -1,4 +1,8 @@
-const BASE_URL = 'https://tools.tornevall.com';
+// Configurable API base URL
+// Production: tools.tornevall.net
+// Staging: tools.tornevall.com
+// Can be overridden via environment variable: VITE_API_URL
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://tools.tornevall.net';
 
 function getHeaders(apiKey) {
   return {
