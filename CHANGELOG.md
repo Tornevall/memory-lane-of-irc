@@ -24,6 +24,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added backend-driven auth-mode hint support via response headers (`X-Irclog-Auth-Mode` / `X-Irclog-Api-Key-Required`) with hostname fallback.
 - Split npm bootstrap into dedicated `make install-npm`; `make install` now depends on it and focuses on `.env` + dependency install.
 - Fixed Vite build layout: source `index.html` restored to dev entry (`/src/main.jsx`) and production output moved back to `dist/` to avoid source overwrite/build recursion failures.
+- Added explicit `make deploy` target and changed `make rebuild` to run install + build + deploy, so rebuilt artifacts are actually published to webroot.
 
 ## [2026-07-20]
 

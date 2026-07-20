@@ -2,7 +2,7 @@ NPM ?= npm
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install-npm install dev build rebuild preview lint
+.PHONY: help install-npm install dev build deploy rebuild preview lint
 
 help:
 	@echo "Available targets:"
@@ -10,7 +10,8 @@ help:
 	@echo "  make install     - Bootstrap .env + install dependencies"
 	@echo "  make dev      - Start Vite dev server"
 	@echo "  make build    - Build production bundle to dist/"
-	@echo "  make rebuild  - Install + build"
+	@echo "  make deploy   - Publish dist/ to webroot (index.html, assets, vite.svg)"
+	@echo "  make rebuild  - Install + build + deploy"
 	@echo "  make preview  - Preview built app"
 	@echo "  make lint     - Run ESLint"
 
@@ -60,7 +61,19 @@ dev:
 build:
 	$(NPM) run build
 
-rebuild: install build
+deploy: build
+	@if [ ! -f dist/index.html ]; then \
+		echo "ERROR: dist/index.html missing; build failed or dist not generated."; \
+		exit 1; \
+	fi
+	@cp -f dist/index.html index.html
+	@rm -rf assets
+	@mkdir -p assets
+	@cp -a dist/assets/. assets/
+	@if [ -f dist/vite.svg ]; then cp -f dist/vite.svg vite.svg; fi
+	@echo "Deployed dist/ -> webroot."
+
+rebuild: install deploy
 
 preview:
 	$(NPM) run preview
