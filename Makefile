@@ -6,7 +6,7 @@ NPM ?= npm
 
 help:
 	@echo "Available targets:"
-	@echo "  make install  - Ensure npm exists (apt-get fallback) + install dependencies"
+	@echo "  make install  - Ensure npm exists (apt-get/nodejs + NodeSource fallback) + install deps"
 	@echo "  make dev      - Start Vite dev server"
 	@echo "  make build    - Build production bundle"
 	@echo "  make rebuild  - Install + build"
@@ -17,17 +17,25 @@ install:
 	@if command -v $(NPM) >/dev/null 2>&1; then \
 		echo "Found npm: $$($(NPM) --version)"; \
 	elif command -v apt-get >/dev/null 2>&1; then \
-		echo "npm not found. Attempting install via apt-get..."; \
-		if [ "$$(id -u)" -eq 0 ]; then \
-			apt-get update && apt-get install -y nodejs npm; \
-		elif command -v sudo >/dev/null 2>&1; then \
-			sudo apt-get update && sudo apt-get install -y nodejs npm; \
-		else \
-			echo "ERROR: npm missing and sudo is unavailable. Run as root or install Node/npm manually."; \
-			exit 1; \
+		echo "npm not found. Attempting bootstrap via apt-get..."; \
+		ASROOT=""; \
+		if [ "$$(id -u)" -ne 0 ]; then \
+			if command -v sudo >/dev/null 2>&1; then ASROOT="sudo"; else \
+				echo "ERROR: npm missing and sudo is unavailable. Run as root or install Node/npm manually."; \
+				exit 1; \
+			fi; \
+		fi; \
+		$$ASROOT apt-get update; \
+		if ! $$ASROOT apt-get install -y nodejs; then \
+			echo "WARN: apt-get nodejs install failed."; \
+		fi; \
+		if ! command -v $(NPM) >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then \
+			echo "Attempting NodeSource fallback (node includes npm)..."; \
+			curl -fsSL https://deb.nodesource.com/setup_20.x | $$ASROOT bash -; \
+			$$ASROOT apt-get install -y nodejs; \
 		fi; \
 		if ! command -v $(NPM) >/dev/null 2>&1; then \
-			echo "ERROR: npm still unavailable after apt-get install."; \
+			echo "ERROR: npm still unavailable after bootstrap attempts (apt-get/nodejs + NodeSource fallback)."; \
 			exit 1; \
 		fi; \
 	else \

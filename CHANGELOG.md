@@ -18,7 +18,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Updated production build output behavior to generate deployable files directly in the app directory.
 - Updated auth UX to allow readonly browsing without API key and gate write actions behind saved key.
 - Updated API docs to reflect optional auth for read endpoints and required auth for write endpoints.
-- Updated `make install` to ensure `npm` exists first, with automatic `apt-get` installation fallback when available.
+- Updated `make install` bootstrap flow: tries `apt-get install nodejs` first (avoids common Ubuntu `npm` package conflicts), then NodeSource fallback when `npm` is still missing.
 - Added trusted-host auth detection (`tools.tornevall.com` / `tools.tornevall.net`) so frontend can treat API key as optional there, including write-access UI state.
 
 ## [2026-07-20]
