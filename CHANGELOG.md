@@ -25,6 +25,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Split npm bootstrap into dedicated `make install-npm`; `make install` now depends on it and focuses on `.env` + dependency install.
 - Fixed Vite build layout: source `index.html` restored to dev entry (`/src/main.jsx`) and production output moved back to `dist/` to avoid source overwrite/build recursion failures.
 - Added explicit `make deploy` target and changed `make rebuild` to run install + build + deploy, so rebuilt artifacts are actually published to webroot.
+- Fixed asset base-path handling: Vite base now comes from env (`BASE_URL` / `VITE_BASE_URL`) so root hosts and subdirectory hosts both resolve JS/CSS correctly without `/missing/` redirects.
 
 ## [2026-07-20]
 
