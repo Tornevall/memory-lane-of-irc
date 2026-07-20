@@ -34,6 +34,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added network + channel selectors on the Search start page (loaded from `/api/irclog/networks` and `/api/irclog/networks/{id}/channels`) so filtering can start before first query.
 - Added `make distclean` target: runs `clean` and also removes `.env`.
 - Fixed network/channel selector API compatibility: frontend now falls back to `/irc/api/networks` and `/irc/api/networks/{id}/channels` when `/api/irclog/*` routes are missing, and normalizes object-shaped API errors into readable text (no `[object Object]`).
+- Added explicit API target selection (`VITE_API_TARGET=prod|test`) as a shorthand when `VITE_API_URL` is not set, so operators can switch React between `tools.tornevall.net` and `tools.tornevall.com` without code edits.
+- Updated docs/examples and permalink handling to use resolved runtime API base instead of hardcoded `.com` links, keeping test/prod behavior consistent.
+- Added Makefile operator targets `build-test`, `build-prod`, `rebuild-test`, and `rebuild-prod` for one-command environment switching.
 
 ## [2026-07-20]
 

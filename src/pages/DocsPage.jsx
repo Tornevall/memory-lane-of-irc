@@ -1,9 +1,13 @@
+import { getApiBaseUrl } from '../services/api';
+
 export default function DocsPage() {
+  const apiBaseUrl = getApiBaseUrl();
+
   return (
     <div className="page docs-page">
       <h1>API Documentation</h1>
       <p className="docs-intro">
-        Base URL: <code>https://tools.tornevall.com</code>
+        Base URL: <code>{apiBaseUrl}</code>
       </p>
 
       <section className="docs-section">
@@ -42,7 +46,7 @@ export default function DocsPage() {
         </table>
         <h3>Example Request</h3>
         <pre><code>{`curl \\
-  "https://tools.tornevall.com/api/irclog/search?q=hello&channel_id=123"`}</code></pre>
+  "${apiBaseUrl}/api/irclog/search?q=hello&channel_id=123"`}</code></pre>
       </section>
 
       <section className="docs-section">
@@ -62,7 +66,7 @@ export default function DocsPage() {
         <pre><code>{`curl -X POST \\
   -H "Content-Type: application/json" \\
   -d '{"query":"php mysql","nick":"Robin","limit":10}' \\
-  "https://tools.tornevall.com/api/irclog/search"`}</code></pre>
+  "${apiBaseUrl}/api/irclog/search"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "results": [
@@ -87,7 +91,7 @@ export default function DocsPage() {
         <p><span className="method get">GET</span> <code>/api/irclog/highlights</code></p>
         <h3>Example Request</h3>
         <pre><code>{`curl \\
-  "https://tools.tornevall.com/api/irclog/highlights"`}</code></pre>
+  "${apiBaseUrl}/api/irclog/highlights"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "highlights": [
@@ -120,7 +124,7 @@ export default function DocsPage() {
   -H "Authorization: Bearer YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"log_event_id":12345,"title":"Great quote","is_public":true}' \\
-  "https://tools.tornevall.com/api/irclog/highlights"`}</code></pre>
+  "${apiBaseUrl}/api/irclog/highlights"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "id": 789,

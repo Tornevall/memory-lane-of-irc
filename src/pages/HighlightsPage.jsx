@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getHighlights, createHighlight } from '../services/api';
+import { getHighlights, createHighlight, getPermalinkUrl } from '../services/api';
 import { hasWriteAccess, isTrustedNoKeyHost } from '../services/authMode';
 
 function getApiKey() {
@@ -178,7 +178,7 @@ export default function HighlightsPage() {
             )}
             {h.permalink && (
               <a
-                href={`https://tools.tornevall.com${h.permalink}`}
+                href={getPermalinkUrl(h.permalink)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="permalink"

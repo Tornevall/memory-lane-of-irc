@@ -39,14 +39,18 @@ npm run build
 Create `.env.local` for your deployment:
 
 ```env
-# API Base URL
+# API Base URL (highest priority)
 VITE_API_URL=https://tools.tornevall.net  # Production
 # VITE_API_URL=https://tools.tornevall.com  # Staging
 # VITE_API_URL=http://localhost:8000  # Local dev
 
+# Optional target shortcut (used only when VITE_API_URL is unset)
+# VITE_API_TARGET=prod  # tools.tornevall.net
+# VITE_API_TARGET=test  # tools.tornevall.com
+
 # Base path (only needed for subdirectory deployment)
-BASE_URL=/
-# BASE_URL=/irclogs-react  # For subdirectory
+VITE_BASE_URL=./
+# VITE_BASE_URL=/irclogs-react/  # Explicit subdirectory override
 ```
 
 ### Deployment Options
@@ -67,7 +71,7 @@ If you need subdirectory deployment:
 
 ```bash
 # Edit .env.local:
-BASE_URL=/irclogs-react
+VITE_BASE_URL=/irclogs-react/
 
 npm run build
 # Deploy dist/ to: https://your-domain.com/irclogs-react/
@@ -93,6 +97,12 @@ VITE_API_URL=https://tools.tornevall.net  // .NET!
 **Staging:**
 ```javascript
 VITE_API_URL=https://tools.tornevall.com  // .COM is staging!
+```
+
+**Target switch without full URL:**
+```javascript
+VITE_API_TARGET=prod // .NET
+VITE_API_TARGET=test // .COM
 ```
 
 ### Custom API Backend
@@ -141,7 +151,7 @@ npm run build
 **GitHub Pages:**
 ```bash
 # For subdirectory deployment
-BASE_URL=/repository-name
+VITE_BASE_URL=/repository-name/
 npm run build
 ```
 
@@ -162,4 +172,3 @@ See `/docs/irclog-api-reference` on tools.tornevall.net
 - `.com` = Staging API
 
 Default is `.net` (production).
-

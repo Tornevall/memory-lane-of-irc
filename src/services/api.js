@@ -1,10 +1,50 @@
 import { updateBackendAuthModeFromHeaders } from './authMode';
 
-// Configurable API base URL
-// Production: tools.tornevall.net
-// Staging: tools.tornevall.com
-// Can be overridden via environment variable: VITE_API_URL
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://tools.tornevall.net';
+const TARGET_BASES = {
+  prod: 'https://tools.tornevall.net',
+  test: 'https://tools.tornevall.com',
+};
+
+function normalizeBaseUrl(raw) {
+  const base = String(raw || '').trim();
+  if (!base) return '';
+  return base.endsWith('/') ? base.slice(0, -1) : base;
+}
+
+function resolveApiBaseUrl() {
+  const explicit = normalizeBaseUrl(import.meta.env.VITE_API_URL);
+  if (explicit) {
+    return explicit;
+  }
+
+  const target = String(import.meta.env.VITE_API_TARGET || '').trim().toLowerCase();
+  if (target && TARGET_BASES[target]) {
+    return TARGET_BASES[target];
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const host = String(window.location.hostname || '').toLowerCase();
+    if (host === 'tools.tornevall.com' || host === 'tools.tornevall.net') {
+      return normalizeBaseUrl(window.location.origin);
+    }
+  }
+
+  return TARGET_BASES.prod;
+}
+
+const BASE_URL = resolveApiBaseUrl();
+
+export function getApiBaseUrl() {
+  return BASE_URL;
+}
+
+export function getPermalinkUrl(permalink) {
+  if (!permalink) return '';
+  if (/^https?:\/\//i.test(permalink)) {
+    return permalink;
+  }
+  return new URL(permalink, `${BASE_URL}/`).toString();
+}
 
 function getHeaders(apiKey) {
   return {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { simpleSearch, advancedSearch, getNetworks, getNetworkChannels } from '../services/api';
+import { simpleSearch, advancedSearch, getNetworks, getNetworkChannels, getPermalinkUrl } from '../services/api';
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -17,7 +17,7 @@ function ResultRow({ result }) {
       <div className="result-message">{result.message}</div>
       {result.permalink && (
         <a
-          href={`https://tools.tornevall.com${result.permalink}`}
+          href={getPermalinkUrl(result.permalink)}
           target="_blank"
           rel="noopener noreferrer"
           className="permalink"

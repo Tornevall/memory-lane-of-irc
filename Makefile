@@ -3,7 +3,7 @@ SOURCE_INDEX ?= index.source.html
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install-npm install ensure-source-index dev build deploy rebuild clean distclean preview lint
+.PHONY: help install-npm install ensure-source-index dev build build-test build-prod deploy rebuild rebuild-test rebuild-prod clean distclean preview lint
 
 help:
 	@echo "Available targets:"
@@ -12,8 +12,12 @@ help:
 	@echo "  make ensure-source-index - Restore source index.html before build"
 	@echo "  make dev      - Start Vite dev server"
 	@echo "  make build    - Build production bundle to dist/"
+	@echo "  make build-test - Build with VITE_API_TARGET=test (tools.tornevall.com)"
+	@echo "  make build-prod - Build with VITE_API_TARGET=prod (tools.tornevall.net)"
 	@echo "  make deploy   - Publish dist/ to webroot (index.html, assets, vite.svg)"
 	@echo "  make rebuild  - Install + build + deploy"
+	@echo "  make rebuild-test - Install + deploy with test API target"
+	@echo "  make rebuild-prod - Install + deploy with prod API target"
 	@echo "  make clean    - Remove build artifacts/caches (dist, .vite cache)"
 	@echo "  make distclean - clean + remove .env"
 	@echo "  make preview  - Preview built app"
@@ -78,6 +82,12 @@ dev:
 build: ensure-source-index
 	$(NPM) run build
 
+build-test: ensure-source-index
+	VITE_API_TARGET=test $(NPM) run build
+
+build-prod: ensure-source-index
+	VITE_API_TARGET=prod $(NPM) run build
+
 deploy: build
 	@if [ ! -f dist/index.html ]; then \
 		echo "ERROR: dist/index.html missing; build failed or dist not generated."; \
@@ -91,6 +101,12 @@ deploy: build
 	@echo "Deployed dist/ -> webroot."
 
 rebuild: install deploy
+
+rebuild-test: install
+	VITE_API_TARGET=test $(MAKE) deploy
+
+rebuild-prod: install
+	VITE_API_TARGET=prod $(MAKE) deploy
 
 clean:
 	@rm -rf dist
