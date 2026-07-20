@@ -2,16 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  // No base path - can be deployed anywhere!
-  // If you need a base path for subdirectory deployment, set it via:
-  // base: process.env.BASE_URL || '/'
-  base: '/',
+  base: command === 'build' ? '/irclogs-react/' : '/',
   build: {
-    outDir: 'dist',
+    outDir: '.',
     assetsDir: 'assets',
-    emptyOutDir: true,
+    emptyOutDir: false,
   },
   server: {
     port: 3000,
@@ -23,4 +20,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))
