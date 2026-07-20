@@ -7,8 +7,6 @@ const TARGET_BASES = {
 const TRUSTED_HOSTS = new Set([
   'tools.tornevall.com',
   'tools.tornevall.net',
-  'loggarna.tornevall.com',
-  'loggarna.tornevall.net',
 ]);
 const READ_SOURCE = String(import.meta.env.VITE_IRCLOG_READ_SOURCE || 'production').trim().toLowerCase() === 'sandbox'
   ? 'sandbox'
@@ -23,8 +21,7 @@ function normalizeBaseUrl(raw) {
 function isTrustedTornevallHost(hostname) {
   const host = String(hostname || '').toLowerCase();
   if (!host) return false;
-  if (TRUSTED_HOSTS.has(host)) return true;
-  return host.endsWith('.tornevall.com') || host.endsWith('.tornevall.net');
+  return TRUSTED_HOSTS.has(host);
 }
 
 function resolveApiBaseUrl() {
