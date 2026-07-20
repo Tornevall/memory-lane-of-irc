@@ -184,10 +184,10 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
   const suffix = queryString ? `?${queryString}` : '';
   return fetchWithFallbackByStatus(
     apiKey,
-    [`/irc/api/logs${suffix}`, `/api/irclog/search${suffix}`],
+    [`/irc/api/logs${suffix}`],
     {},
     fallbackError,
-    [404, 500, 502, 503],
+    [404],
     { includeAuth: false }
   );
 }
@@ -213,17 +213,16 @@ export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom
 }
 
 export async function advancedSearch(apiKey, body) {
-  const requestBody = { ...body, source: READ_SOURCE };
-  const data = await fetchWithFallback(
-    apiKey,
-    ['/api/irclog/search'],
-    {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    },
-    'Search failed',
-    { includeAuth: false }
-  );
+  const params = new URLSearchParams();
+  appendIfPresent(params, 'q', body?.query);
+  appendIfPresent(params, 'network_id', body?.network_id);
+  appendIfPresent(params, 'channel_id', body?.channel_id);
+  appendIfPresent(params, 'nick', body?.nick);
+  appendIfPresent(params, 'date_from', body?.date_from);
+  appendIfPresent(params, 'date_to', body?.date_to);
+  appendIfPresent(params, 'limit', body?.limit);
+  appendIfPresent(params, 'page', body?.page);
+  const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
 }
 

@@ -33,7 +33,7 @@ export default function DocsPage() {
 
       <section className="docs-section">
         <h2>Simple Search</h2>
-        <p><span className="method get">GET</span> <code>/api/irclog/search</code></p>
+        <p><span className="method get">GET</span> <code>/irc/api/logs</code></p>
         <h3>Query Parameters</h3>
         <table className="params-table">
           <thead>
@@ -46,13 +46,13 @@ export default function DocsPage() {
         </table>
         <h3>Example Request</h3>
         <pre><code>{`curl \\
-  "${apiBaseUrl}/api/irclog/search?q=hello&channel_id=123"`}</code></pre>
+  "${apiBaseUrl}/irc/api/logs?q=hello&channel_id=123&source=production"`}</code></pre>
       </section>
 
       <section className="docs-section">
         <h2>Advanced Search</h2>
-        <p><span className="method post">POST</span> <code>/api/irclog/search</code></p>
-        <h3>Request Body</h3>
+        <p><span className="method get">GET</span> <code>/irc/api/logs</code></p>
+        <h3>Supported Parameters</h3>
         <pre><code>{`{
   "query": "php mysql",
   "channel_id": 123,
@@ -63,10 +63,8 @@ export default function DocsPage() {
   "page": 1
 }`}</code></pre>
         <h3>Example Request</h3>
-        <pre><code>{`curl -X POST \\
-  -H "Content-Type: application/json" \\
-  -d '{"query":"php mysql","nick":"Robin","limit":10}' \\
-  "${apiBaseUrl}/api/irclog/search"`}</code></pre>
+        <pre><code>{`curl \\
+  "${apiBaseUrl}/irc/api/logs?q=php+mysql&nick=Robin&limit=10&page=1&source=production"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "results": [
