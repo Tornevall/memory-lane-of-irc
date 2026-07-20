@@ -33,6 +33,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added router basename auto-detection for `/irclogs-react` so React routes resolve correctly in subdirectory deployments (`no routes matched location` fixed).
 - Added network + channel selectors on the Search start page (loaded from `/api/irclog/networks` and `/api/irclog/networks/{id}/channels`) so filtering can start before first query.
 - Added `make distclean` target: runs `clean` and also removes `.env`.
+- Fixed network/channel selector API compatibility: frontend now falls back to `/irc/api/networks` and `/irc/api/networks/{id}/channels` when `/api/irclog/*` routes are missing, and normalizes object-shaped API errors into readable text (no `[object Object]`).
 
 ## [2026-07-20]
 
