@@ -51,8 +51,12 @@ export default function SearchPage() {
     if (Array.isArray(payload)) {
       return payload;
     }
-    if (payload && Array.isArray(payload[preferredKey])) {
-      return payload[preferredKey];
+    const preferred = payload?.[preferredKey];
+    if (Array.isArray(preferred)) {
+      return preferred;
+    }
+    if (preferred && typeof preferred === 'object') {
+      return Object.values(preferred);
     }
     if (payload && Array.isArray(payload.results)) {
       return payload.results;
@@ -60,7 +64,25 @@ export default function SearchPage() {
     if (payload && Array.isArray(payload.data)) {
       return payload.data;
     }
+    if (payload?.data && Array.isArray(payload.data[preferredKey])) {
+      return payload.data[preferredKey];
+    }
+    if (payload?.data?.[preferredKey] && typeof payload.data[preferredKey] === 'object') {
+      return Object.values(payload.data[preferredKey]);
+    }
     return [];
+  }
+
+  function getEntityId(entity) {
+    return entity?.id ?? entity?.network_id ?? entity?.channel_id ?? entity?.value ?? '';
+  }
+
+  function getEntityName(entity, fallbackPrefix) {
+    return entity?.name
+      || entity?.network_name
+      || entity?.channel_name
+      || entity?.label
+      || `${fallbackPrefix} ${getEntityId(entity)}`;
   }
 
   async function loadNetworks() {
@@ -167,8 +189,8 @@ export default function SearchPage() {
           >
             <option value="">All networks</option>
             {networks.map((network) => (
-              <option key={network.id} value={network.id}>
-                {network.name || network.network_name || `Network ${network.id}`}
+              <option key={String(getEntityId(network))} value={String(getEntityId(network))}>
+                {getEntityName(network, 'Network')}
               </option>
             ))}
           </select>
@@ -183,8 +205,8 @@ export default function SearchPage() {
           >
             <option value="">All channels</option>
             {channels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.name || channel.channel_name || `Channel ${channel.id}`}
+              <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
+                {getEntityName(channel, 'Channel')}
               </option>
             ))}
           </select>
