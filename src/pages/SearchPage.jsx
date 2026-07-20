@@ -123,6 +123,19 @@ export default function SearchPage() {
     }));
   }
 
+  function applyDateRange(firstDate, lastDate) {
+    const first = firstDate || '';
+    const last = lastDate || '';
+    setSimpleMinDate(first);
+    setSimpleMaxDate(last);
+    setSimpleDate((current) => {
+      if (!current) return '';
+      if (first && current < first) return first;
+      if (last && current > last) return last;
+      return current;
+    });
+  }
+
   async function loadDateRange(selectedNetworkId, selectedChannelId) {
     if (!selectedChannelId) {
       setSimpleDate('');
@@ -130,33 +143,11 @@ export default function SearchPage() {
       setSimpleMaxDate('');
       return;
     }
-
-    function applyDateRange(firstDate, lastDate) {
-      const first = firstDate || '';
-      const last = lastDate || '';
-      setSimpleMinDate(first);
-      setSimpleMaxDate(last);
-      setSimpleDate((current) => {
-        if (!current) return '';
-        if (first && current < first) return first;
-        if (last && current > last) return last;
-        return current;
-      });
-    }
     const apiKey = getApiKey();
     setLoadingDateRange(true);
     try {
       const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
-      const first = range.firstDate || '';
-      const last = range.lastDate || '';
-      setSimpleMinDate(first);
-      setSimpleMaxDate(last);
-      setSimpleDate((current) => {
-        if (!current) return '';
-        if (first && current < first) return first;
-        if (last && current > last) return last;
-        return current;
-      });
+      applyDateRange(range.firstDate || '', range.lastDate || '');
     } catch {
       setSimpleMinDate('');
       setSimpleMaxDate('');

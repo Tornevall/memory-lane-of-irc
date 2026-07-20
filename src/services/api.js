@@ -119,10 +119,10 @@ function appendIfPresent(params, key, value) {
   if (normalized !== null && normalized !== undefined && normalized !== '') {
     params.append(key, String(normalized));
   }
+}
 
-  function appendReadSource(params) {
-    appendIfPresent(params, 'source', READ_SOURCE);
-  }
+function appendReadSource(params) {
+  appendIfPresent(params, 'source', READ_SOURCE);
 }
 
 function extractResultArray(payload) {
@@ -235,10 +235,6 @@ export async function getChannelDateRange(apiKey, networkId, channelId) {
     return { firstDate: '', lastDate: '', total: 0 };
   }
 
-  export function getReadSource() {
-    return READ_SOURCE;
-  }
-
   const firstParams = new URLSearchParams();
   appendIfPresent(firstParams, 'network_id', networkId);
   appendIfPresent(firstParams, 'channel_id', channelId);
@@ -269,4 +265,8 @@ export async function getChannelDateRange(apiKey, networkId, channelId) {
     lastDate: lastDate || firstDate,
     total,
   };
+}
+
+export function getReadSource() {
+  return READ_SOURCE;
 }
