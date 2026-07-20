@@ -11,6 +11,10 @@ export default function DocsPage() {
         <p>
           API key is optional for read endpoints (readonly mode). Write endpoints require a Bearer token:
         </p>
+        <p>
+          On trusted hosts (<code>tools.tornevall.com</code> and <code>tools.tornevall.net</code>), the frontend
+          auto-detects relaxed mode where API key is optional.
+        </p>
         <pre><code>{`Authorization: Bearer YOUR_API_KEY`}</code></pre>
       </section>
 

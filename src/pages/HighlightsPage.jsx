@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getHighlights, createHighlight } from '../services/api';
+import { hasWriteAccess, isTrustedNoKeyHost } from '../services/authMode';
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -7,7 +8,8 @@ function getApiKey() {
 
 export default function HighlightsPage() {
   const [apiKey, setApiKey] = useState(getApiKey());
-  const hasApiKey = Boolean(apiKey);
+  const trustedNoKeyHost = isTrustedNoKeyHost();
+  const canWrite = hasWriteAccess(apiKey);
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,7 +31,7 @@ export default function HighlightsPage() {
     } catch (err) {
       const msg = String(err.message || '');
       if (!apiKey && /auth|required|unauthorized|forbidden/i.test(msg)) {
-        setError('Readonly mode active. Add API key to enable writing highlights/comments.');
+        setError('Read access denied by backend for anonymous mode.');
         setHighlights([]);
       } else {
         setError(msg || 'Failed to fetch highlights.');
@@ -51,7 +53,7 @@ export default function HighlightsPage() {
 
   async function handleCreate(e) {
     e.preventDefault();
-    if (!apiKey) {
+    if (!canWrite) {
       setCreateError('Readonly mode active. Add API key to create highlights/comments.');
       return;
     }
@@ -85,16 +87,21 @@ export default function HighlightsPage() {
         <button
           className="btn-primary"
           onClick={() => setShowForm(!showForm)}
-          disabled={!hasApiKey}
-          title={!hasApiKey ? 'Readonly mode: add API key for write access.' : ''}
+          disabled={!canWrite}
+          title={!canWrite ? 'Readonly mode: add API key for write access.' : ''}
         >
           {showForm ? 'Cancel' : '+ New Highlight'}
         </button>
       </div>
 
-      {!hasApiKey && (
+      {!canWrite && (
         <div className="readonly-banner">
           Readonly mode: browsing is allowed. Add API key for writing highlights/comments.
+        </div>
+      )}
+      {trustedNoKeyHost && !apiKey && (
+        <div className="success-banner">
+          Trusted host mode active: API key is not required on this host.
         </div>
       )}
 

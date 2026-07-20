@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { isTrustedNoKeyHost } from '../services/authMode';
 
 export default function ApiKeyInput() {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
+  const trustedNoKeyHost = isTrustedNoKeyHost();
   const hasKey = key.trim().length > 0;
 
   useEffect(() => {
@@ -27,13 +29,13 @@ export default function ApiKeyInput() {
     <div className="api-key-input">
       <input
         type="password"
-        placeholder="Optional API Key (write access)"
+        placeholder={trustedNoKeyHost ? 'API Key (optional on this host)' : 'Optional API Key (write access)'}
         value={key}
         onChange={(e) => setKey(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleSave()}
       />
       <span className={`mode-chip ${hasKey ? 'write' : 'readonly'}`}>
-        {hasKey ? 'Write' : 'Readonly'}
+        {hasKey || trustedNoKeyHost ? 'Write' : 'Readonly'}
       </span>
       <button onClick={handleSave} className="btn-save">
         {saved ? '✓ Saved' : 'Save'}
