@@ -38,6 +38,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Updated docs/examples and permalink handling to use resolved runtime API base instead of hardcoded `.com` links, keeping test/prod behavior consistent.
 - Added Makefile operator targets `build-test`, `build-prod`, `rebuild-test`, and `rebuild-prod` for one-command environment switching.
 - Changed network/channel endpoint order to try `/irc/api/*` first (then `/api/irclog/*`, then `/irclog/*`) to avoid hard failures on hosts where only the IRC viewer routes exist.
+- Added trusted-host CORS guard: when running on `tools.tornevall.com`/`.net`, a mismatched explicit `VITE_API_URL` pointing at the other trusted host is ignored in favor of same-origin API base to prevent preflight/CORS failures.
 
 ## [2026-07-20]
 

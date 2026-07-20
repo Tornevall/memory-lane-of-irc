@@ -4,6 +4,7 @@ const TARGET_BASES = {
   prod: 'https://tools.tornevall.net',
   test: 'https://tools.tornevall.com',
 };
+const TRUSTED_HOSTS = new Set(['tools.tornevall.com', 'tools.tornevall.net']);
 
 function normalizeBaseUrl(raw) {
   const base = String(raw || '').trim();
@@ -12,8 +13,22 @@ function normalizeBaseUrl(raw) {
 }
 
 function resolveApiBaseUrl() {
+  const browserHost = typeof window !== 'undefined' ? String(window.location?.hostname || '').toLowerCase() : '';
+  const browserOrigin = typeof window !== 'undefined' ? normalizeBaseUrl(window.location?.origin) : '';
   const explicit = normalizeBaseUrl(import.meta.env.VITE_API_URL);
   if (explicit) {
+    // Guard against stale env where .net build accidentally points to .com (or vice versa),
+    // which causes CORS/preflight failures for API calls.
+    if (browserOrigin && TRUSTED_HOSTS.has(browserHost)) {
+      try {
+        const explicitHost = String(new URL(explicit).hostname || '').toLowerCase();
+        if (TRUSTED_HOSTS.has(explicitHost) && explicitHost !== browserHost) {
+          return browserOrigin;
+        }
+      } catch {
+        // Keep explicit URL if it is not a valid absolute URL.
+      }
+    }
     return explicit;
   }
 
@@ -22,11 +37,8 @@ function resolveApiBaseUrl() {
     return TARGET_BASES[target];
   }
 
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    const host = String(window.location.hostname || '').toLowerCase();
-    if (host === 'tools.tornevall.com' || host === 'tools.tornevall.net') {
-      return normalizeBaseUrl(window.location.origin);
-    }
+  if (browserOrigin && TRUSTED_HOSTS.has(browserHost)) {
+    return browserOrigin;
   }
 
   return TARGET_BASES.prod;
