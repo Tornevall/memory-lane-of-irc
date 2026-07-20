@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { simpleSearch, advancedSearch } from '../services/api';
+import { useEffect, useState } from 'react';
+import { simpleSearch, advancedSearch, getNetworks, getNetworkChannels } from '../services/api';
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -32,7 +32,12 @@ function ResultRow({ result }) {
 export default function SearchPage() {
   const [mode, setMode] = useState('simple');
   const [query, setQuery] = useState('');
+  const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [networks, setNetworks] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [loadingNetworks, setLoadingNetworks] = useState(false);
+  const [loadingChannels, setLoadingChannels] = useState(false);
   const [nick, setNick] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -41,6 +46,57 @@ export default function SearchPage() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  function extractArray(payload, preferredKey) {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    if (payload && Array.isArray(payload[preferredKey])) {
+      return payload[preferredKey];
+    }
+    if (payload && Array.isArray(payload.results)) {
+      return payload.results;
+    }
+    if (payload && Array.isArray(payload.data)) {
+      return payload.data;
+    }
+    return [];
+  }
+
+  async function loadNetworks() {
+    const apiKey = getApiKey();
+    setLoadingNetworks(true);
+    try {
+      const payload = await getNetworks(apiKey);
+      setNetworks(extractArray(payload, 'networks'));
+    } catch (err) {
+      setError(err.message || 'Failed to load networks.');
+    } finally {
+      setLoadingNetworks(false);
+    }
+  }
+
+  async function loadChannels(selectedNetworkId) {
+    if (!selectedNetworkId) {
+      setChannels([]);
+      return;
+    }
+    const apiKey = getApiKey();
+    setLoadingChannels(true);
+    try {
+      const payload = await getNetworkChannels(apiKey, selectedNetworkId);
+      setChannels(extractArray(payload, 'channels'));
+    } catch (err) {
+      setError(err.message || 'Failed to load channels.');
+      setChannels([]);
+    } finally {
+      setLoadingChannels(false);
+    }
+  }
+
+  useEffect(() => {
+    loadNetworks();
+  }, []);
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -51,9 +107,10 @@ export default function SearchPage() {
     try {
       let data;
       if (mode === 'simple') {
-        data = await simpleSearch(apiKey, query, channelId);
+        data = await simpleSearch(apiKey, query, channelId, networkId);
       } else {
         const body = { query, limit: Number(limit), page: Number(page) };
+        if (networkId) body.network_id = Number(networkId);
         if (channelId) body.channel_id = Number(channelId);
         if (nick) body.nick = nick;
         if (dateFrom) body.date_from = dateFrom;
@@ -98,13 +155,40 @@ export default function SearchPage() {
           />
         </div>
         <div className="form-row">
-          <label>Channel ID (optional)</label>
-          <input
-            type="number"
+          <label>Network (optional)</label>
+          <select
+            value={networkId}
+            onChange={(e) => {
+              const selected = e.target.value;
+              setNetworkId(selected);
+              setChannelId('');
+              loadChannels(selected);
+            }}
+          >
+            <option value="">All networks</option>
+            {networks.map((network) => (
+              <option key={network.id} value={network.id}>
+                {network.name || network.network_name || `Network ${network.id}`}
+              </option>
+            ))}
+          </select>
+          {loadingNetworks && <small>Loading networks...</small>}
+        </div>
+        <div className="form-row">
+          <label>Channel (optional)</label>
+          <select
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
-            placeholder="e.g. 123"
-          />
+            disabled={Boolean(networkId) && loadingChannels}
+          >
+            <option value="">All channels</option>
+            {channels.map((channel) => (
+              <option key={channel.id} value={channel.id}>
+                {channel.name || channel.channel_name || `Channel ${channel.id}`}
+              </option>
+            ))}
+          </select>
+          {networkId && loadingChannels && <small>Loading channels...</small>}
         </div>
         {mode === 'advanced' && (
           <>

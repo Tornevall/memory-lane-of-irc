@@ -13,8 +13,9 @@ function getHeaders(apiKey) {
   };
 }
 
-export async function simpleSearch(apiKey, query, channelId) {
+export async function simpleSearch(apiKey, query, channelId, networkId) {
   const params = new URLSearchParams({ q: query });
+  if (networkId) params.append('network_id', networkId);
   if (channelId) params.append('channel_id', channelId);
   const res = await fetch(`${BASE_URL}/api/irclog/search?${params}`, {
     headers: getHeaders(apiKey),
@@ -60,5 +61,27 @@ export async function createHighlight(apiKey, body) {
   updateBackendAuthModeFromHeaders(res.headers);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to create highlight');
+  return data;
+}
+
+export async function getNetworks(apiKey) {
+  const res = await fetch(`${BASE_URL}/api/irclog/networks`, {
+    headers: getHeaders(apiKey),
+    signal: AbortSignal.timeout(30000),
+  });
+  updateBackendAuthModeFromHeaders(res.headers);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch networks');
+  return data;
+}
+
+export async function getNetworkChannels(apiKey, networkId) {
+  const res = await fetch(`${BASE_URL}/api/irclog/networks/${networkId}/channels`, {
+    headers: getHeaders(apiKey),
+    signal: AbortSignal.timeout(30000),
+  });
+  updateBackendAuthModeFromHeaders(res.headers);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch channels');
   return data;
 }
