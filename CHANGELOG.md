@@ -9,6 +9,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 - Added `Makefile` for operator-friendly commands: `install`, `dev`, `build`, `rebuild`, `preview`, and `lint`.
+- Added Makefile `help` target (default) to list available build/dev commands.
 - Added `AGENTS.md` guidance for IRCLogs React architecture, import/review expectations, and deployment constraints.
 
 ### Changed
