@@ -147,7 +147,7 @@ export async function createHighlight(apiKey, body) {
 export async function getNetworks(apiKey) {
   const data = await fetchWithFallback(
     apiKey,
-    ['/api/irclog/networks', '/irc/api/networks'],
+    ['/irc/api/networks', '/api/irclog/networks', '/irclog/networks'],
     {},
     'Failed to fetch networks'
   );
@@ -157,7 +157,11 @@ export async function getNetworks(apiKey) {
 export async function getNetworkChannels(apiKey, networkId) {
   const data = await fetchWithFallback(
     apiKey,
-    [`/api/irclog/networks/${networkId}/channels`, `/irc/api/networks/${networkId}/channels`],
+    [
+      `/irc/api/networks/${networkId}/channels`,
+      `/api/irclog/networks/${networkId}/channels`,
+      `/irclog/networks/${networkId}/channels`,
+    ],
     {},
     'Failed to fetch channels'
   );

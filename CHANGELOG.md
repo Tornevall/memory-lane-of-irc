@@ -37,6 +37,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added explicit API target selection (`VITE_API_TARGET=prod|test`) as a shorthand when `VITE_API_URL` is not set, so operators can switch React between `tools.tornevall.net` and `tools.tornevall.com` without code edits.
 - Updated docs/examples and permalink handling to use resolved runtime API base instead of hardcoded `.com` links, keeping test/prod behavior consistent.
 - Added Makefile operator targets `build-test`, `build-prod`, `rebuild-test`, and `rebuild-prod` for one-command environment switching.
+- Changed network/channel endpoint order to try `/irc/api/*` first (then `/api/irclog/*`, then `/irclog/*`) to avoid hard failures on hosts where only the IRC viewer routes exist.
 
 ## [2026-07-20]
 
