@@ -188,6 +188,30 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   border-color: #7c8cf8;
 }
 
+.date-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.date-selector input[type="text"] {
+  flex: 1;
+}
+
+.date-picker-btn {
+  min-width: 2.6rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.date-native-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
 .checkbox-row { flex-direction: row; align-items: center; }
 .checkbox-row label { display: flex; align-items: center; gap: 0.5rem; color: #e2e8f0; }
 

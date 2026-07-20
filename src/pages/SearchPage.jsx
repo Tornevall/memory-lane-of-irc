@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   simpleSearch,
   advancedSearch,
@@ -33,6 +33,93 @@ function ResultRow({ result }) {
           Permalink ↗
         </a>
       )}
+    </div>
+  );
+}
+
+function normalizeDateInput(value, minDate = '', maxDate = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  let year;
+  let month;
+  let day;
+
+  let m = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (m) {
+    year = Number(m[1]);
+    month = Number(m[2]);
+    day = Number(m[3]);
+  } else {
+    m = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (m) {
+      year = Number(m[3]);
+      month = Number(m[2]);
+      day = Number(m[1]);
+    } else {
+      return raw;
+    }
+  }
+
+  if (year < 1900 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return raw;
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    Number.isNaN(parsed.getTime())
+    || parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    return raw;
+  }
+
+  const iso = `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  if (minDate && iso < minDate) return minDate;
+  if (maxDate && iso > maxDate) return maxDate;
+  return iso;
+}
+
+function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = false, placeholder = 'yyyy-mm-dd' }) {
+  const hiddenDateRef = useRef(null);
+  const normalized = normalizeDateInput(value, minDate, maxDate);
+  const pickerValue = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+
+  const openPicker = () => {
+    if (disabled) return;
+    const input = hiddenDateRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+  };
+
+  return (
+    <div className="date-selector">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => onChange(normalizeDateInput(value, minDate, maxDate))}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+      <button type="button" className="btn-secondary date-picker-btn" onClick={openPicker} disabled={disabled}>
+        📅
+      </button>
+      <input
+        ref={hiddenDateRef}
+        type="date"
+        value={pickerValue}
+        min={minDate || undefined}
+        max={maxDate || undefined}
+        tabIndex={-1}
+        className="date-native-input"
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
@@ -332,21 +419,21 @@ export default function SearchPage() {
         {mode === 'simple' && (
           <div className="form-row">
             <label>Date range (optional)</label>
-            <input
-              type="date"
+            <DateSelector
               value={simpleDateFrom}
-              onChange={(e) => setSimpleDateFrom(e.target.value)}
-              min={simpleMinDate || undefined}
-              max={simpleMaxDate || undefined}
+              onChange={setSimpleDateFrom}
+              minDate={simpleMinDate}
+              maxDate={simpleMaxDate}
               disabled={Boolean(channelId) && loadingDateRange}
+              placeholder="From: yyyy-mm-dd"
             />
-            <input
-              type="date"
+            <DateSelector
               value={simpleDateTo}
-              onChange={(e) => setSimpleDateTo(e.target.value)}
-              min={simpleMinDate || undefined}
-              max={simpleMaxDate || undefined}
+              onChange={setSimpleDateTo}
+              minDate={simpleMinDate}
+              maxDate={simpleMaxDate}
               disabled={Boolean(channelId) && loadingDateRange}
+              placeholder="To: yyyy-mm-dd"
             />
             {channelId && loadingDateRange && <small>Loading date range...</small>}
             {channelId && !loadingDateRange && (simpleMinDate || simpleMaxDate) && (
@@ -369,18 +456,18 @@ export default function SearchPage() {
             </div>
             <div className="form-row">
               <label>Date From</label>
-              <input
-                type="date"
+              <DateSelector
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={setDateFrom}
+                placeholder="From: yyyy-mm-dd"
               />
             </div>
             <div className="form-row">
               <label>Date To</label>
-              <input
-                type="date"
+              <DateSelector
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={setDateTo}
+                placeholder="To: yyyy-mm-dd"
               />
             </div>
             <div className="form-row">
