@@ -51,7 +51,8 @@ export default function SearchPage() {
   const [dateTo, setDateTo] = useState('');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(1);
-  const [simpleDate, setSimpleDate] = useState('');
+  const [simpleDateFrom, setSimpleDateFrom] = useState('');
+  const [simpleDateTo, setSimpleDateTo] = useState('');
   const [simpleMinDate, setSimpleMinDate] = useState('');
   const [simpleMaxDate, setSimpleMaxDate] = useState('');
   const [loadingDateRange, setLoadingDateRange] = useState(false);
@@ -128,7 +129,13 @@ export default function SearchPage() {
     const last = lastDate || '';
     setSimpleMinDate(first);
     setSimpleMaxDate(last);
-    setSimpleDate((current) => {
+    setSimpleDateFrom((current) => {
+      if (!current) return '';
+      if (first && current < first) return first;
+      if (last && current > last) return last;
+      return current;
+    });
+    setSimpleDateTo((current) => {
       if (!current) return '';
       if (first && current < first) return first;
       if (last && current > last) return last;
@@ -138,7 +145,8 @@ export default function SearchPage() {
 
   async function loadDateRange(selectedNetworkId, selectedChannelId) {
     if (!selectedChannelId) {
-      setSimpleDate('');
+      setSimpleDateFrom('');
+      setSimpleDateTo('');
       setSimpleMinDate('');
       setSimpleMaxDate('');
       return;
@@ -149,6 +157,8 @@ export default function SearchPage() {
       const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
       applyDateRange(range.firstDate || '', range.lastDate || '');
     } catch {
+      setSimpleDateFrom('');
+      setSimpleDateTo('');
       setSimpleMinDate('');
       setSimpleMaxDate('');
     } finally {
@@ -180,13 +190,15 @@ export default function SearchPage() {
       const payload = await getNetworkChannels(apiKey, selectedNetworkId);
       const loadedChannels = extractArray(payload, 'channels');
       setChannels(loadedChannels);
-      setSimpleDate('');
+      setSimpleDateFrom('');
+      setSimpleDateTo('');
       setSimpleMinDate('');
       setSimpleMaxDate('');
     } catch (err) {
       setError(err.message || 'Failed to load channels.');
       setChannels([]);
-      setSimpleDate('');
+      setSimpleDateFrom('');
+      setSimpleDateTo('');
       setSimpleMinDate('');
       setSimpleMaxDate('');
     } finally {
@@ -211,7 +223,9 @@ export default function SearchPage() {
         if (!trimmedQuery && !channelId) {
           throw new Error('Choose a channel to open chat logs directly, or enter a query.');
         }
-        data = await simpleSearch(apiKey, trimmedQuery, channelId, networkId, simpleDate);
+        const effectiveFrom = simpleDateFrom && simpleDateTo && simpleDateFrom > simpleDateTo ? simpleDateTo : simpleDateFrom;
+        const effectiveTo = simpleDateFrom && simpleDateTo && simpleDateFrom > simpleDateTo ? simpleDateFrom : simpleDateTo;
+        data = await simpleSearch(apiKey, trimmedQuery, channelId, networkId, effectiveFrom, effectiveTo);
       } else {
         const body = { query, limit: Number(limit), page: Number(page) };
         if (networkId) body.network_id = Number(networkId);
@@ -269,7 +283,8 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
-              setSimpleDate('');
+              setSimpleDateFrom('');
+              setSimpleDateTo('');
               setSimpleMinDate('');
               setSimpleMaxDate('');
               loadChannels(selected);
@@ -316,11 +331,19 @@ export default function SearchPage() {
         </div>
         {mode === 'simple' && (
           <div className="form-row">
-            <label>Date (optional)</label>
+            <label>Date range (optional)</label>
             <input
               type="date"
-              value={simpleDate}
-              onChange={(e) => setSimpleDate(e.target.value)}
+              value={simpleDateFrom}
+              onChange={(e) => setSimpleDateFrom(e.target.value)}
+              min={simpleMinDate || undefined}
+              max={simpleMaxDate || undefined}
+              disabled={Boolean(channelId) && loadingDateRange}
+            />
+            <input
+              type="date"
+              value={simpleDateTo}
+              onChange={(e) => setSimpleDateTo(e.target.value)}
               min={simpleMinDate || undefined}
               max={simpleMaxDate || undefined}
               disabled={Boolean(channelId) && loadingDateRange}

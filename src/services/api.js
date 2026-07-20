@@ -146,12 +146,16 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
   );
 }
 
-export async function simpleSearch(apiKey, query, channelId, networkId, date = '') {
+export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom = '', dateTo = '') {
   const params = new URLSearchParams();
   appendIfPresent(params, 'q', query);
   appendIfPresent(params, 'network_id', networkId);
   appendIfPresent(params, 'channel_id', channelId);
-  appendIfPresent(params, 'date', date);
+  appendIfPresent(params, 'date_from', dateFrom);
+  appendIfPresent(params, 'date_to', dateTo);
+  if (dateFrom && dateTo && dateFrom === dateTo) {
+    appendIfPresent(params, 'date', dateFrom);
+  }
   const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
 }

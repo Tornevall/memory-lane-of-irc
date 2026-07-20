@@ -43,6 +43,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added environment-controlled read source (`VITE_IRCLOG_READ_SOURCE=production|sandbox`) and propagated `source` to networks/channels/log queries, so operators can browse sandbox data directly.
 - Updated simple search UX: query is optional in simple mode (open channel directly), and date picker uses channel `first_date`/`last_date` limits when available.
 - Fixed simple search/date-range wiring regressions so date range helper and read-source helper are callable at runtime (no undefined function errors).
+- Upgraded simple-mode date control to a real date-range picker (`from` + `to`) with channel-scoped min/max constraints from `first_date`/`last_date`.
 
 ## [2026-07-20]
 
