@@ -3,7 +3,7 @@ SOURCE_INDEX ?= index.source.html
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install-npm install ensure-source-index dev build deploy rebuild clean preview lint
+.PHONY: help install-npm install ensure-source-index dev build deploy rebuild clean distclean preview lint
 
 help:
 	@echo "Available targets:"
@@ -15,6 +15,7 @@ help:
 	@echo "  make deploy   - Publish dist/ to webroot (index.html, assets, vite.svg)"
 	@echo "  make rebuild  - Install + build + deploy"
 	@echo "  make clean    - Remove build artifacts/caches (dist, .vite cache)"
+	@echo "  make distclean - clean + remove .env"
 	@echo "  make preview  - Preview built app"
 	@echo "  make lint     - Run ESLint"
 
@@ -95,6 +96,10 @@ clean:
 	@rm -rf dist
 	@rm -rf node_modules/.vite
 	@echo "Removed dist/ and node_modules/.vite cache."
+
+distclean: clean
+	@rm -f .env
+	@echo "Removed .env."
 
 preview:
 	$(NPM) run preview
