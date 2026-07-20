@@ -121,6 +121,7 @@ async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError
           ...(init.headers || {}),
         },
         signal: init.signal || AbortSignal.timeout(30000),
+        redirect: init.redirect || 'manual',
       });
     } catch (error) {
       const networkMessage = String(error?.message || '').trim();
@@ -132,6 +133,13 @@ async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError
       );
     }
     updateBackendAuthModeFromHeaders(res.headers);
+    if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+      lastStatus = res.status || 302;
+      if (i < paths.length - 1) {
+        continue;
+      }
+      throw new Error(`${fallbackError} (${lastStatus})`);
+    }
     const data = await parseJsonSafe(res);
     if (res.ok) {
       return data;
