@@ -2,7 +2,7 @@ NPM ?= npm
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install-npm install dev build deploy rebuild preview lint
+.PHONY: help install-npm install dev build deploy rebuild clean preview lint
 
 help:
 	@echo "Available targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  make build    - Build production bundle to dist/"
 	@echo "  make deploy   - Publish dist/ to webroot (index.html, assets, vite.svg)"
 	@echo "  make rebuild  - Install + build + deploy"
+	@echo "  make clean    - Remove build artifacts/caches (dist, .vite cache)"
 	@echo "  make preview  - Preview built app"
 	@echo "  make lint     - Run ESLint"
 
@@ -74,6 +75,11 @@ deploy: build
 	@echo "Deployed dist/ -> webroot."
 
 rebuild: install deploy
+
+clean:
+	@rm -rf dist
+	@rm -rf node_modules/.vite
+	@echo "Removed dist/ and node_modules/.vite cache."
 
 preview:
 	$(NPM) run preview
