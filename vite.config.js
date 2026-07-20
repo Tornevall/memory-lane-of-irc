@@ -6,9 +6,9 @@ export default defineConfig(({ command }) => ({
   plugins: [react()],
   base: command === 'build' ? '/irclogs-react/' : '/',
   build: {
-    outDir: '.',
+    outDir: 'dist',
     assetsDir: 'assets',
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
   server: {
     port: 3000,

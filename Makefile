@@ -9,7 +9,7 @@ help:
 	@echo "  make install-npm - Ensure npm exists (apt-get/nodejs + NodeSource fallback)"
 	@echo "  make install     - Bootstrap .env + install dependencies"
 	@echo "  make dev      - Start Vite dev server"
-	@echo "  make build    - Build production bundle"
+	@echo "  make build    - Build production bundle to dist/"
 	@echo "  make rebuild  - Install + build"
 	@echo "  make preview  - Preview built app"
 	@echo "  make lint     - Run ESLint"
