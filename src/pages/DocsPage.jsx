@@ -8,7 +8,9 @@ export default function DocsPage() {
 
       <section className="docs-section">
         <h2>Authentication</h2>
-        <p>All requests require a Bearer token in the Authorization header:</p>
+        <p>
+          API key is optional for read endpoints (readonly mode). Write endpoints require a Bearer token:
+        </p>
         <pre><code>{`Authorization: Bearer YOUR_API_KEY`}</code></pre>
       </section>
 
@@ -35,7 +37,7 @@ export default function DocsPage() {
           </tbody>
         </table>
         <h3>Example Request</h3>
-        <pre><code>{`curl -H "Authorization: Bearer YOUR_KEY" \\
+        <pre><code>{`curl \\
   "https://tools.tornevall.com/api/irclog/search?q=hello&channel_id=123"`}</code></pre>
       </section>
 
@@ -54,7 +56,6 @@ export default function DocsPage() {
 }`}</code></pre>
         <h3>Example Request</h3>
         <pre><code>{`curl -X POST \\
-  -H "Authorization: Bearer YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"query":"php mysql","nick":"Robin","limit":10}' \\
   "https://tools.tornevall.com/api/irclog/search"`}</code></pre>
@@ -81,7 +82,7 @@ export default function DocsPage() {
         <h2>Get Highlights</h2>
         <p><span className="method get">GET</span> <code>/api/irclog/highlights</code></p>
         <h3>Example Request</h3>
-        <pre><code>{`curl -H "Authorization: Bearer YOUR_KEY" \\
+        <pre><code>{`curl \\
   "https://tools.tornevall.com/api/irclog/highlights"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{

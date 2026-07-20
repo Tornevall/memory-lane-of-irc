@@ -86,6 +86,27 @@ body {
 .btn-clear { background: #374151; color: #9ca3af; }
 .btn-clear:hover { background: #4b5563; }
 
+.mode-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.mode-chip.readonly {
+  color: #fcd34d;
+  background: #3f2f05;
+  border-color: #92400e;
+}
+
+.mode-chip.write {
+  color: #86efac;
+  background: #052e16;
+  border-color: #166534;
+}
+
 /* Main layout */
 .main-content {
   max-width: 960px;
@@ -218,6 +239,15 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   background: #052e16;
   border: 1px solid #166534;
   color: #86efac;
+  font-size: 0.875rem;
+}
+
+.readonly-banner {
+  padding: 0.65rem 1rem;
+  border-radius: 7px;
+  background: #172554;
+  border: 1px solid #1d4ed8;
+  color: #bfdbfe;
   font-size: 0.875rem;
 }
 

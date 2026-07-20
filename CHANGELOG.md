@@ -15,6 +15,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Changed
 - Updated Vite build configuration for `/irclogs-react/` subpath deployment.
 - Updated production build output behavior to generate deployable files directly in the app directory.
+- Updated auth UX to allow readonly browsing without API key and gate write actions behind saved key.
+- Updated API docs to reflect optional auth for read endpoints and required auth for write endpoints.
 
 ## [2026-07-20]
 

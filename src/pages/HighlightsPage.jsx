@@ -6,6 +6,8 @@ function getApiKey() {
 }
 
 export default function HighlightsPage() {
+  const [apiKey, setApiKey] = useState(getApiKey());
+  const hasApiKey = Boolean(apiKey);
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,18 +21,19 @@ export default function HighlightsPage() {
   const [createSuccess, setCreateSuccess] = useState('');
 
   async function fetchHighlights() {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setError('Please enter and save your API key first.');
-      return;
-    }
     setLoading(true);
     setError('');
     try {
       const data = await getHighlights(apiKey);
       setHighlights(data.highlights || []);
     } catch (err) {
-      setError(err.message);
+      const msg = String(err.message || '');
+      if (!apiKey && /auth|required|unauthorized|forbidden/i.test(msg)) {
+        setError('Readonly mode active. Add API key to enable writing highlights/comments.');
+        setHighlights([]);
+      } else {
+        setError(msg || 'Failed to fetch highlights.');
+      }
     } finally {
       setLoading(false);
     }
@@ -38,13 +41,18 @@ export default function HighlightsPage() {
 
   useEffect(() => {
     fetchHighlights();
+  }, [apiKey]);
+
+  useEffect(() => {
+    const syncApiKey = () => setApiKey(getApiKey());
+    window.addEventListener('irc-api-key-changed', syncApiKey);
+    return () => window.removeEventListener('irc-api-key-changed', syncApiKey);
   }, []);
 
   async function handleCreate(e) {
     e.preventDefault();
-    const apiKey = getApiKey();
     if (!apiKey) {
-      setCreateError('Please enter and save your API key first.');
+      setCreateError('Readonly mode active. Add API key to create highlights/comments.');
       return;
     }
     setCreating(true);
@@ -74,10 +82,21 @@ export default function HighlightsPage() {
     <div className="page">
       <div className="page-header">
         <h1>Highlights</h1>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+        <button
+          className="btn-primary"
+          onClick={() => setShowForm(!showForm)}
+          disabled={!hasApiKey}
+          title={!hasApiKey ? 'Readonly mode: add API key for write access.' : ''}
+        >
           {showForm ? 'Cancel' : '+ New Highlight'}
         </button>
       </div>
+
+      {!hasApiKey && (
+        <div className="readonly-banner">
+          Readonly mode: browsing is allowed. Add API key for writing highlights/comments.
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="search-form highlight-form">

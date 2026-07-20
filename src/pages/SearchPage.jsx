@@ -45,10 +45,6 @@ export default function SearchPage() {
   async function handleSearch(e) {
     e.preventDefault();
     const apiKey = getApiKey();
-    if (!apiKey) {
-      setError('Please enter and save your API key first.');
-      return;
-    }
     setLoading(true);
     setError('');
     setResults(null);
