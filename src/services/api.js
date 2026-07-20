@@ -5,6 +5,9 @@ const TARGET_BASES = {
   test: 'https://tools.tornevall.com',
 };
 const TRUSTED_HOSTS = new Set(['tools.tornevall.com', 'tools.tornevall.net']);
+const READ_SOURCE = String(import.meta.env.VITE_IRCLOG_READ_SOURCE || 'production').trim().toLowerCase() === 'sandbox'
+  ? 'sandbox'
+  : 'production';
 
 function normalizeBaseUrl(raw) {
   const base = String(raw || '').trim();
@@ -83,7 +86,12 @@ async function parseJsonSafe(res) {
 }
 
 async function fetchWithFallback(apiKey, paths, init = {}, fallbackError = 'Request failed') {
+  return fetchWithFallbackByStatus(apiKey, paths, init, fallbackError, [404]);
+}
+
+async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError = 'Request failed', fallbackStatuses = [404]) {
   let lastStatus = null;
+  const fallbackStatusSet = new Set(fallbackStatuses);
   for (let i = 0; i < paths.length; i += 1) {
     const res = await fetch(`${BASE_URL}${paths[i]}`, {
       ...init,
@@ -99,34 +107,63 @@ async function fetchWithFallback(apiKey, paths, init = {}, fallbackError = 'Requ
       return data;
     }
     lastStatus = res.status;
-    // Try fallback only on not-found style mismatches.
-    if (res.status !== 404 || i === paths.length - 1) {
+    if (!fallbackStatusSet.has(res.status) || i === paths.length - 1) {
       throw new Error(extractErrorMessage(data, `${fallbackError} (${res.status})`));
     }
   }
   throw new Error(`${fallbackError}${lastStatus ? ` (${lastStatus})` : ''}`);
 }
 
-export async function simpleSearch(apiKey, query, channelId, networkId) {
-  const params = new URLSearchParams({ q: query });
-  if (networkId) params.append('network_id', networkId);
-  if (channelId) params.append('channel_id', channelId);
-  const data = await fetchWithFallback(
+function appendIfPresent(params, key, value) {
+  const normalized = typeof value === 'string' ? value.trim() : value;
+  if (normalized !== null && normalized !== undefined && normalized !== '') {
+    params.append(key, String(normalized));
+  }
+
+  function appendReadSource(params) {
+    appendIfPresent(params, 'source', READ_SOURCE);
+  }
+}
+
+function extractResultArray(payload) {
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data?.results)) return payload.data.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+async function fetchLogQuery(apiKey, params, fallbackError) {
+  appendReadSource(params);
+  const queryString = params.toString();
+  const suffix = queryString ? `?${queryString}` : '';
+  return fetchWithFallbackByStatus(
     apiKey,
-    [`/api/irclog/search?${params}`],
+    [`/irc/api/logs${suffix}`, `/api/irclog/search${suffix}`],
     {},
-    'Search failed'
+    fallbackError,
+    [404, 500, 502, 503]
   );
+}
+
+export async function simpleSearch(apiKey, query, channelId, networkId, date = '') {
+  const params = new URLSearchParams();
+  appendIfPresent(params, 'q', query);
+  appendIfPresent(params, 'network_id', networkId);
+  appendIfPresent(params, 'channel_id', channelId);
+  appendIfPresent(params, 'date', date);
+  const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
 }
 
 export async function advancedSearch(apiKey, body) {
+  const requestBody = { ...body, source: READ_SOURCE };
   const data = await fetchWithFallback(
     apiKey,
     ['/api/irclog/search'],
     {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     },
     'Search failed'
   );
@@ -157,9 +194,12 @@ export async function createHighlight(apiKey, body) {
 }
 
 export async function getNetworks(apiKey) {
+  const params = new URLSearchParams();
+  appendReadSource(params);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
   const data = await fetchWithFallback(
     apiKey,
-    ['/irc/api/networks', '/api/irclog/networks', '/irclog/networks'],
+    [`/irc/api/networks${suffix}`, `/api/irclog/networks${suffix}`, `/irclog/networks${suffix}`],
     {},
     'Failed to fetch networks'
   );
@@ -167,15 +207,66 @@ export async function getNetworks(apiKey) {
 }
 
 export async function getNetworkChannels(apiKey, networkId) {
+  const params = new URLSearchParams();
+  appendReadSource(params);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
   const data = await fetchWithFallback(
     apiKey,
     [
-      `/irc/api/networks/${networkId}/channels`,
-      `/api/irclog/networks/${networkId}/channels`,
-      `/irclog/networks/${networkId}/channels`,
+      `/irc/api/networks/${networkId}/channels${suffix}`,
+      `/api/irclog/networks/${networkId}/channels${suffix}`,
+      `/irclog/networks/${networkId}/channels${suffix}`,
     ],
     {},
     'Failed to fetch channels'
   );
   return data || {};
+}
+
+function toIsoDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+export async function getChannelDateRange(apiKey, networkId, channelId) {
+  if (!channelId) {
+    return { firstDate: '', lastDate: '', total: 0 };
+  }
+
+  export function getReadSource() {
+    return READ_SOURCE;
+  }
+
+  const firstParams = new URLSearchParams();
+  appendIfPresent(firstParams, 'network_id', networkId);
+  appendIfPresent(firstParams, 'channel_id', channelId);
+  firstParams.append('limit', '1');
+  firstParams.append('offset', '0');
+
+  const firstPayload = await fetchLogQuery(apiKey, firstParams, 'Failed to fetch channel date range');
+  const firstResults = extractResultArray(firstPayload);
+  const total = Number(firstPayload?.total ?? firstResults.length ?? 0);
+  const firstDate = toIsoDate(firstResults[0]?.occurred_at || firstResults[0]?.date || firstResults[0]?.created_at);
+
+  if (total <= 1) {
+    return { firstDate, lastDate: firstDate, total };
+  }
+
+  const lastParams = new URLSearchParams();
+  appendIfPresent(lastParams, 'network_id', networkId);
+  appendIfPresent(lastParams, 'channel_id', channelId);
+  lastParams.append('limit', '1');
+  lastParams.append('offset', String(Math.max(total - 1, 0)));
+
+  const lastPayload = await fetchLogQuery(apiKey, lastParams, 'Failed to fetch channel date range');
+  const lastResults = extractResultArray(lastPayload);
+  const lastDate = toIsoDate(lastResults[0]?.occurred_at || lastResults[0]?.date || lastResults[0]?.created_at);
+
+  return {
+    firstDate,
+    lastDate: lastDate || firstDate,
+    total,
+  };
 }

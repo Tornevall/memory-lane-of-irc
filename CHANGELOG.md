@@ -40,6 +40,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Changed network/channel endpoint order to try `/irc/api/*` first (then `/api/irclog/*`, then `/irclog/*`) to avoid hard failures on hosts where only the IRC viewer routes exist.
 - Added trusted-host CORS guard: when running on `tools.tornevall.com`/`.net`, a mismatched explicit `VITE_API_URL` pointing at the other trusted host is ignored in favor of same-origin API base to prevent preflight/CORS failures.
 - Hardened network/channel dropdown parsing for API response variants (`array`, keyed maps, and nested `data.*`) so selectors populate even when backend payload envelope differs.
+- Added environment-controlled read source (`VITE_IRCLOG_READ_SOURCE=production|sandbox`) and propagated `source` to networks/channels/log queries, so operators can browse sandbox data directly.
+- Updated simple search UX: query is optional in simple mode (open channel directly), and date picker uses channel `first_date`/`last_date` limits when available.
 
 ## [2026-07-20]
 

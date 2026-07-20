@@ -48,6 +48,9 @@ VITE_API_URL=https://tools.tornevall.net  # Production
 # VITE_API_TARGET=prod  # tools.tornevall.net
 # VITE_API_TARGET=test  # tools.tornevall.com
 
+# Read dataset
+VITE_IRCLOG_READ_SOURCE=production # or sandbox
+
 # Base path (only needed for subdirectory deployment)
 VITE_BASE_URL=./
 # VITE_BASE_URL=/irclogs-react/  # Explicit subdirectory override

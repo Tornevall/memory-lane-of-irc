@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { simpleSearch, advancedSearch, getNetworks, getNetworkChannels, getPermalinkUrl } from '../services/api';
+import {
+  simpleSearch,
+  advancedSearch,
+  getNetworks,
+  getNetworkChannels,
+  getChannelDateRange,
+  getReadSource,
+  getPermalinkUrl,
+} from '../services/api';
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -43,9 +51,14 @@ export default function SearchPage() {
   const [dateTo, setDateTo] = useState('');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(1);
+  const [simpleDate, setSimpleDate] = useState('');
+  const [simpleMinDate, setSimpleMinDate] = useState('');
+  const [simpleMaxDate, setSimpleMaxDate] = useState('');
+  const [loadingDateRange, setLoadingDateRange] = useState(false);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const readSource = getReadSource();
 
   function extractArray(payload, preferredKey) {
     if (Array.isArray(payload)) {
@@ -85,6 +98,73 @@ export default function SearchPage() {
       || `${fallbackPrefix} ${getEntityId(entity)}`;
   }
 
+  function getNetworkLabelById(id) {
+    const wanted = String(id || '');
+    const network = networks.find((n) => String(getEntityId(n)) === wanted);
+    return network ? getEntityName(network, 'Network') : '';
+  }
+
+  function getChannelLabelById(id) {
+    const wanted = String(id || '');
+    const channel = channels.find((c) => String(getEntityId(c)) === wanted);
+    return channel ? getEntityName(channel, 'Channel') : '';
+  }
+
+  function normalizeResultRows(payload) {
+    const rows = extractArray(payload, 'results');
+    const selectedNetworkLabel = getNetworkLabelById(networkId);
+    const selectedChannelLabel = getChannelLabelById(channelId);
+    return rows.map((row) => ({
+      ...row,
+      message: row.message ?? row.message_text ?? row.event_text ?? '',
+      occurred_at: row.occurred_at ?? row.date ?? row.created_at ?? null,
+      network: row.network ?? row.network_name ?? selectedNetworkLabel ?? '',
+      channel: row.channel ?? row.channel_name ?? selectedChannelLabel ?? '',
+    }));
+  }
+
+  async function loadDateRange(selectedNetworkId, selectedChannelId) {
+    if (!selectedChannelId) {
+      setSimpleDate('');
+      setSimpleMinDate('');
+      setSimpleMaxDate('');
+      return;
+    }
+
+    function applyDateRange(firstDate, lastDate) {
+      const first = firstDate || '';
+      const last = lastDate || '';
+      setSimpleMinDate(first);
+      setSimpleMaxDate(last);
+      setSimpleDate((current) => {
+        if (!current) return '';
+        if (first && current < first) return first;
+        if (last && current > last) return last;
+        return current;
+      });
+    }
+    const apiKey = getApiKey();
+    setLoadingDateRange(true);
+    try {
+      const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
+      const first = range.firstDate || '';
+      const last = range.lastDate || '';
+      setSimpleMinDate(first);
+      setSimpleMaxDate(last);
+      setSimpleDate((current) => {
+        if (!current) return '';
+        if (first && current < first) return first;
+        if (last && current > last) return last;
+        return current;
+      });
+    } catch {
+      setSimpleMinDate('');
+      setSimpleMaxDate('');
+    } finally {
+      setLoadingDateRange(false);
+    }
+  }
+
   async function loadNetworks() {
     const apiKey = getApiKey();
     setLoadingNetworks(true);
@@ -107,10 +187,17 @@ export default function SearchPage() {
     setLoadingChannels(true);
     try {
       const payload = await getNetworkChannels(apiKey, selectedNetworkId);
-      setChannels(extractArray(payload, 'channels'));
+      const loadedChannels = extractArray(payload, 'channels');
+      setChannels(loadedChannels);
+      setSimpleDate('');
+      setSimpleMinDate('');
+      setSimpleMaxDate('');
     } catch (err) {
       setError(err.message || 'Failed to load channels.');
       setChannels([]);
+      setSimpleDate('');
+      setSimpleMinDate('');
+      setSimpleMaxDate('');
     } finally {
       setLoadingChannels(false);
     }
@@ -129,7 +216,11 @@ export default function SearchPage() {
     try {
       let data;
       if (mode === 'simple') {
-        data = await simpleSearch(apiKey, query, channelId, networkId);
+        const trimmedQuery = String(query || '').trim();
+        if (!trimmedQuery && !channelId) {
+          throw new Error('Choose a channel to open chat logs directly, or enter a query.');
+        }
+        data = await simpleSearch(apiKey, trimmedQuery, channelId, networkId, simpleDate);
       } else {
         const body = { query, limit: Number(limit), page: Number(page) };
         if (networkId) body.network_id = Number(networkId);
@@ -139,7 +230,10 @@ export default function SearchPage() {
         if (dateTo) body.date_to = dateTo;
         data = await advancedSearch(apiKey, body);
       }
-      setResults(data);
+      setResults({
+        ...data,
+        results: normalizeResultRows(data),
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -172,8 +266,8 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search query..."
-            required
+            placeholder={mode === 'simple' ? 'Optional. Leave empty to open channel logs.' : 'Search query...'}
+            required={mode !== 'simple'}
           />
         </div>
         <div className="form-row">
@@ -184,6 +278,9 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
+              setSimpleDate('');
+              setSimpleMinDate('');
+              setSimpleMaxDate('');
               loadChannels(selected);
             }}
           >
@@ -200,7 +297,18 @@ export default function SearchPage() {
           <label>Channel (optional)</label>
           <select
             value={channelId}
-            onChange={(e) => setChannelId(e.target.value)}
+            onChange={(e) => {
+              const selected = e.target.value;
+              setChannelId(selected);
+              const selectedChannel = channels.find((channel) => String(getEntityId(channel)) === String(selected));
+              const first = selectedChannel?.first_date || selectedChannel?.firstDate || '';
+              const last = selectedChannel?.last_date || selectedChannel?.lastDate || '';
+              if (first || last) {
+                applyDateRange(first, last);
+              } else {
+                loadDateRange(networkId, selected);
+              }
+            }}
             disabled={Boolean(networkId) && loadingChannels}
           >
             <option value="">All channels</option>
@@ -211,7 +319,29 @@ export default function SearchPage() {
             ))}
           </select>
           {networkId && loadingChannels && <small>Loading channels...</small>}
+          {!loadingChannels && channelId && (
+            <small>Reading from: {readSource}</small>
+          )}
         </div>
+        {mode === 'simple' && (
+          <div className="form-row">
+            <label>Date (optional)</label>
+            <input
+              type="date"
+              value={simpleDate}
+              onChange={(e) => setSimpleDate(e.target.value)}
+              min={simpleMinDate || undefined}
+              max={simpleMaxDate || undefined}
+              disabled={Boolean(channelId) && loadingDateRange}
+            />
+            {channelId && loadingDateRange && <small>Loading date range...</small>}
+            {channelId && !loadingDateRange && (simpleMinDate || simpleMaxDate) && (
+              <small>
+                Available range: {simpleMinDate || '...'} to {simpleMaxDate || '...'}
+              </small>
+            )}
+          </div>
+        )}
         {mode === 'advanced' && (
           <>
             <div className="form-row">
@@ -261,7 +391,7 @@ export default function SearchPage() {
           </>
         )}
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Searching…' : 'Search'}
+          {loading ? 'Loading…' : (mode === 'simple' && !String(query || '').trim() ? 'Open channel' : 'Search')}
         </button>
       </form>
 
