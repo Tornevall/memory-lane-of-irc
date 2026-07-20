@@ -13,6 +13,14 @@ This document defines implementation rules for `public/irclogs-react` as a stand
 - Auth mode should be backend-driven when possible: frontend may use host-based defaults, but should prefer explicit backend
   hints (for example response headers indicating whether API key is required) to avoid environment drift.
 
+## External Consumer Compatibility (IRCWatch)
+
+- `/irc/api/*` is also consumed by `F:/LOCAL-DEV/ircwatch-project` (bot command `!memorylane` / `!irclogs`).
+- Keep endpoint/query compatibility for non-browser consumers when touching API usage assumptions in this frontend:
+  - `GET /irc/api/networks`
+  - `GET /irc/api/networks/{networkId}/channels`
+  - `GET /irc/api/logs` with `network_id`, `channel_id`, `q`, `source`, `limit`, `offset`
+
 ## Import/Review Workflow Contract (Backend-Assisted)
 
 - Ingestions are two-phase: write to review/sandbox first, then explicit approval promotes to production.

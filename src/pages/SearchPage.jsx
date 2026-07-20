@@ -59,6 +59,28 @@ function normalizeDateInput(value, minDate = '', maxDate = '') {
     } else {
       return raw;
     }
+
+    function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
+      const raw = String(value || '').trim();
+      if (!raw) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return `${raw}T${endOfDayForDateOnly ? '23:59' : '00:00'}`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw)) {
+        return raw.slice(0, 16).replace(' ', 'T');
+      }
+      const candidate = raw.replace(' ', 'T');
+      const dt = new Date(candidate);
+      if (Number.isNaN(dt.getTime())) {
+        return '';
+      }
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      const hours = String(dt.getHours()).padStart(2, '0');
+      const minutes = String(dt.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
   }
 
   if (year < 1900 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) {
@@ -131,6 +153,8 @@ export default function SearchPage() {
   const [channelId, setChannelId] = useState('');
   const [networks, setNetworks] = useState([]);
   const [channels, setChannels] = useState([]);
+  const [networksReady, setNetworksReady] = useState(false);
+  const [channelsReady, setChannelsReady] = useState(false);
   const [loadingNetworks, setLoadingNetworks] = useState(false);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [nick, setNick] = useState('');
@@ -138,14 +162,16 @@ export default function SearchPage() {
   const [dateTo, setDateTo] = useState('');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(1);
-  const [simpleDateFrom, setSimpleDateFrom] = useState('');
-  const [simpleDateTo, setSimpleDateTo] = useState('');
-  const [simpleMinDate, setSimpleMinDate] = useState('');
-  const [simpleMaxDate, setSimpleMaxDate] = useState('');
+  const [simpleDateTimeFrom, setSimpleDateTimeFrom] = useState('');
+  const [simpleDateTimeTo, setSimpleDateTimeTo] = useState('');
+  const [simpleMinDateTime, setSimpleMinDateTime] = useState('');
+  const [simpleMaxDateTime, setSimpleMaxDateTime] = useState('');
   const [loadingDateRange, setLoadingDateRange] = useState(false);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const channelsRequestSeqRef = useRef(0);
+  const channelsCacheRef = useRef(new Map());
   const readSource = getReadSource();
 
   function extractArray(payload, preferredKey) {
@@ -212,30 +238,23 @@ export default function SearchPage() {
   }
 
   function applyDateRange(firstDate, lastDate) {
-    const first = firstDate || '';
-    const last = lastDate || '';
-    setSimpleMinDate(first);
-    setSimpleMaxDate(last);
-    setSimpleDateFrom((current) => {
-      if (!current) return '';
-      if (first && current < first) return first;
-      if (last && current > last) return last;
-      return current;
-    });
-    setSimpleDateTo((current) => {
-      if (!current) return '';
-      if (first && current < first) return first;
-      if (last && current > last) return last;
-      return current;
-    });
+    const first = toLocalDateTimeValue(firstDate, false);
+    const last = toLocalDateTimeValue(lastDate, true);
+    const minValue = first || last || '';
+    const maxValue = last || first || '';
+    setSimpleMinDateTime(minValue);
+    setSimpleMaxDateTime(maxValue);
+    // Always reset defaults when a channel is selected.
+    setSimpleDateTimeFrom(minValue);
+    setSimpleDateTimeTo(maxValue);
   }
 
   async function loadDateRange(selectedNetworkId, selectedChannelId) {
     if (!selectedChannelId) {
-      setSimpleDateFrom('');
-      setSimpleDateTo('');
-      setSimpleMinDate('');
-      setSimpleMaxDate('');
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
       return;
     }
     const apiKey = getApiKey();
@@ -244,10 +263,10 @@ export default function SearchPage() {
       const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
       applyDateRange(range.firstDate || '', range.lastDate || '');
     } catch {
-      setSimpleDateFrom('');
-      setSimpleDateTo('');
-      setSimpleMinDate('');
-      setSimpleMaxDate('');
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
     } finally {
       setLoadingDateRange(false);
     }
@@ -256,40 +275,69 @@ export default function SearchPage() {
   async function loadNetworks() {
     const apiKey = getApiKey();
     setLoadingNetworks(true);
+    setNetworksReady(false);
     try {
       const payload = await getNetworks(apiKey);
       setNetworks(extractArray(payload, 'networks'));
+      setNetworksReady(true);
     } catch (err) {
       setError(err.message || 'Failed to load networks.');
+      setNetworks([]);
+      setNetworksReady(false);
     } finally {
       setLoadingNetworks(false);
     }
   }
 
   async function loadChannels(selectedNetworkId) {
+    channelsRequestSeqRef.current += 1;
+    const requestSeq = channelsRequestSeqRef.current;
     if (!selectedNetworkId) {
       setChannels([]);
+      setChannelsReady(false);
+      setLoadingChannels(false);
+      return;
+    }
+    const cacheKey = String(selectedNetworkId);
+    const cachedChannels = channelsCacheRef.current.get(cacheKey);
+    if (cachedChannels) {
+      setChannels(cachedChannels);
+      setChannelsReady(true);
+      setLoadingChannels(false);
       return;
     }
     const apiKey = getApiKey();
+    setChannels([]);
+    setChannelsReady(false);
     setLoadingChannels(true);
     try {
       const payload = await getNetworkChannels(apiKey, selectedNetworkId);
+      if (requestSeq !== channelsRequestSeqRef.current) {
+        return;
+      }
       const loadedChannels = extractArray(payload, 'channels');
+      channelsCacheRef.current.set(cacheKey, loadedChannels);
       setChannels(loadedChannels);
-      setSimpleDateFrom('');
-      setSimpleDateTo('');
-      setSimpleMinDate('');
-      setSimpleMaxDate('');
+      setChannelsReady(true);
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
     } catch (err) {
+      if (requestSeq !== channelsRequestSeqRef.current) {
+        return;
+      }
       setError(err.message || 'Failed to load channels.');
       setChannels([]);
-      setSimpleDateFrom('');
-      setSimpleDateTo('');
-      setSimpleMinDate('');
-      setSimpleMaxDate('');
+      setChannelsReady(false);
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
     } finally {
-      setLoadingChannels(false);
+      if (requestSeq === channelsRequestSeqRef.current) {
+        setLoadingChannels(false);
+      }
     }
   }
 
@@ -310,8 +358,8 @@ export default function SearchPage() {
         if (!trimmedQuery && !channelId) {
           throw new Error('Choose a channel to open chat logs directly, or enter a query.');
         }
-        const effectiveFrom = simpleDateFrom && simpleDateTo && simpleDateFrom > simpleDateTo ? simpleDateTo : simpleDateFrom;
-        const effectiveTo = simpleDateFrom && simpleDateTo && simpleDateFrom > simpleDateTo ? simpleDateFrom : simpleDateTo;
+        const effectiveFrom = simpleDateTimeFrom && simpleDateTimeTo && simpleDateTimeFrom > simpleDateTimeTo ? simpleDateTimeTo : simpleDateTimeFrom;
+        const effectiveTo = simpleDateTimeFrom && simpleDateTimeTo && simpleDateTimeFrom > simpleDateTimeTo ? simpleDateTimeFrom : simpleDateTimeTo;
         data = await simpleSearch(apiKey, trimmedQuery, channelId, networkId, effectiveFrom, effectiveTo);
       } else {
         const body = { query, limit: Number(limit), page: Number(page) };
@@ -370,21 +418,26 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
-              setSimpleDateFrom('');
-              setSimpleDateTo('');
-              setSimpleMinDate('');
-              setSimpleMaxDate('');
+              setChannels([]);
+              setChannelsReady(false);
+              setSimpleDateTimeFrom('');
+              setSimpleDateTimeTo('');
+              setSimpleMinDateTime('');
+              setSimpleMaxDateTime('');
               loadChannels(selected);
             }}
+            disabled={loadingNetworks || !networksReady}
           >
-            <option value="">All networks</option>
+            <option value="">
+              {loadingNetworks ? 'Loading networks...' : (networksReady ? 'All networks' : 'Networks unavailable')}
+            </option>
             {networks.map((network) => (
               <option key={String(getEntityId(network))} value={String(getEntityId(network))}>
                 {getEntityName(network, 'Network')}
               </option>
             ))}
           </select>
-          {loadingNetworks && <small>Loading networks...</small>}
+          {loadingNetworks && <small className="loading-hint"><span className="loading-spinner" />Loading networks...</small>}
         </div>
         <div className="form-row">
           <label>Channel (optional)</label>
@@ -393,6 +446,8 @@ export default function SearchPage() {
             onChange={(e) => {
               const selected = e.target.value;
               setChannelId(selected);
+              setSimpleDateTimeFrom('');
+              setSimpleDateTimeTo('');
               const selectedChannel = channels.find((channel) => String(getEntityId(channel)) === String(selected));
               const first = selectedChannel?.first_date || selectedChannel?.firstDate || '';
               const last = selectedChannel?.last_date || selectedChannel?.lastDate || '';
@@ -402,43 +457,48 @@ export default function SearchPage() {
                 loadDateRange(networkId, selected);
               }
             }}
-            disabled={Boolean(networkId) && loadingChannels}
+            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
           >
-            <option value="">All channels</option>
+            <option value="">
+              {loadingChannels
+                ? 'Loading channels...'
+                : (networkId ? (channelsReady ? 'All channels in selected network' : 'Loading channels...') : 'Select network first')}
+            </option>
             {channels.map((channel) => (
               <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
                 {getEntityName(channel, 'Channel')}
               </option>
             ))}
           </select>
-          {networkId && loadingChannels && <small>Loading channels...</small>}
+          {networkId && loadingChannels && <small className="loading-hint"><span className="loading-spinner" />Loading channels...</small>}
+          {networkId && !loadingChannels && channels.length === 0 && <small>No channels found for selected network.</small>}
           {!loadingChannels && channelId && (
             <small>Reading from: {readSource}</small>
           )}
         </div>
         {mode === 'simple' && (
           <div className="form-row">
-            <label>Date range (optional)</label>
-            <DateSelector
-              value={simpleDateFrom}
-              onChange={setSimpleDateFrom}
-              minDate={simpleMinDate}
-              maxDate={simpleMaxDate}
-              disabled={Boolean(channelId) && loadingDateRange}
-              placeholder="From: yyyy-mm-dd"
+            <label>Date & time range (optional)</label>
+            <input
+              type="datetime-local"
+              value={simpleDateTimeFrom}
+              onChange={(e) => setSimpleDateTimeFrom(e.target.value)}
+              min={simpleMinDateTime || undefined}
+              max={simpleMaxDateTime || undefined}
+              disabled={!channelId || loadingDateRange}
             />
-            <DateSelector
-              value={simpleDateTo}
-              onChange={setSimpleDateTo}
-              minDate={simpleMinDate}
-              maxDate={simpleMaxDate}
-              disabled={Boolean(channelId) && loadingDateRange}
-              placeholder="To: yyyy-mm-dd"
+            <input
+              type="datetime-local"
+              value={simpleDateTimeTo}
+              onChange={(e) => setSimpleDateTimeTo(e.target.value)}
+              min={simpleMinDateTime || undefined}
+              max={simpleMaxDateTime || undefined}
+              disabled={!channelId || loadingDateRange}
             />
             {channelId && loadingDateRange && <small>Loading date range...</small>}
-            {channelId && !loadingDateRange && (simpleMinDate || simpleMaxDate) && (
+            {channelId && !loadingDateRange && (simpleMinDateTime || simpleMaxDateTime) && (
               <small>
-                Available range: {simpleMinDate || '...'} to {simpleMaxDate || '...'}
+                Available range: {simpleMinDateTime || '...'} to {simpleMaxDateTime || '...'}
               </small>
             )}
           </div>

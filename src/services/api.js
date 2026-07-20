@@ -4,7 +4,12 @@ const TARGET_BASES = {
   prod: 'https://tools.tornevall.net',
   test: 'https://tools.tornevall.com',
 };
-const TRUSTED_HOSTS = new Set(['tools.tornevall.com', 'tools.tornevall.net']);
+const TRUSTED_HOSTS = new Set([
+  'tools.tornevall.com',
+  'tools.tornevall.net',
+  'loggarna.tornevall.com',
+  'loggarna.tornevall.net',
+]);
 const READ_SOURCE = String(import.meta.env.VITE_IRCLOG_READ_SOURCE || 'production').trim().toLowerCase() === 'sandbox'
   ? 'sandbox'
   : 'production';
@@ -15,6 +20,13 @@ function normalizeBaseUrl(raw) {
   return base.endsWith('/') ? base.slice(0, -1) : base;
 }
 
+function isTrustedTornevallHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  if (TRUSTED_HOSTS.has(host)) return true;
+  return host.endsWith('.tornevall.com') || host.endsWith('.tornevall.net');
+}
+
 function resolveApiBaseUrl() {
   const browserHost = typeof window !== 'undefined' ? String(window.location?.hostname || '').toLowerCase() : '';
   const browserOrigin = typeof window !== 'undefined' ? normalizeBaseUrl(window.location?.origin) : '';
@@ -22,10 +34,10 @@ function resolveApiBaseUrl() {
   if (explicit) {
     // Guard against stale env where .net build accidentally points to .com (or vice versa),
     // which causes CORS/preflight failures for API calls.
-    if (browserOrigin && TRUSTED_HOSTS.has(browserHost)) {
+    if (browserOrigin && isTrustedTornevallHost(browserHost)) {
       try {
         const explicitHost = String(new URL(explicit).hostname || '').toLowerCase();
-        if (TRUSTED_HOSTS.has(explicitHost) && explicitHost !== browserHost) {
+        if (isTrustedTornevallHost(explicitHost) && explicitHost !== browserHost) {
           return browserOrigin;
         }
       } catch {
@@ -40,7 +52,7 @@ function resolveApiBaseUrl() {
     return TARGET_BASES[target];
   }
 
-  if (browserOrigin && TRUSTED_HOSTS.has(browserHost)) {
+  if (browserOrigin && isTrustedTornevallHost(browserHost)) {
     return browserOrigin;
   }
 
@@ -61,10 +73,12 @@ export function getPermalinkUrl(permalink) {
   return new URL(permalink, `${BASE_URL}/`).toString();
 }
 
-function getHeaders(apiKey) {
+function getHeaders(apiKey, options = {}) {
+  const includeContentType = options.includeContentType !== false;
+  const includeAuth = options.includeAuth === true;
   return {
-    'Content-Type': 'application/json',
-    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    ...(includeContentType ? { 'Content-Type': 'application/json' } : {}),
+    ...(includeAuth && apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
   };
 }
 
@@ -85,22 +99,38 @@ async function parseJsonSafe(res) {
   }
 }
 
-async function fetchWithFallback(apiKey, paths, init = {}, fallbackError = 'Request failed') {
-  return fetchWithFallbackByStatus(apiKey, paths, init, fallbackError, [404]);
+async function fetchWithFallback(apiKey, paths, init = {}, fallbackError = 'Request failed', options = {}) {
+  return fetchWithFallbackByStatus(apiKey, paths, init, fallbackError, [404], options);
 }
 
-async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError = 'Request failed', fallbackStatuses = [404]) {
+async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError = 'Request failed', fallbackStatuses = [404], options = {}) {
   let lastStatus = null;
   const fallbackStatusSet = new Set(fallbackStatuses);
+  const hasBody = typeof init.body !== 'undefined' && init.body !== null;
+  const headers = getHeaders(apiKey, {
+    includeContentType: hasBody,
+    includeAuth: options.includeAuth === true,
+  });
   for (let i = 0; i < paths.length; i += 1) {
-    const res = await fetch(`${BASE_URL}${paths[i]}`, {
-      ...init,
-      headers: {
-        ...getHeaders(apiKey),
-        ...(init.headers || {}),
-      },
-      signal: init.signal || AbortSignal.timeout(30000),
-    });
+    let res;
+    try {
+      res = await fetch(`${BASE_URL}${paths[i]}`, {
+        ...init,
+        headers: {
+          ...headers,
+          ...(init.headers || {}),
+        },
+        signal: init.signal || AbortSignal.timeout(30000),
+      });
+    } catch (error) {
+      const networkMessage = String(error?.message || '').trim();
+      if (i < paths.length - 1) {
+        continue;
+      }
+      throw new Error(
+        networkMessage || `Network error while calling ${BASE_URL}${paths[i]}. Check CORS/proxy and API base URL.`
+      );
+    }
     updateBackendAuthModeFromHeaders(res.headers);
     const data = await parseJsonSafe(res);
     if (res.ok) {
@@ -125,6 +155,16 @@ function appendReadSource(params) {
   appendIfPresent(params, 'source', READ_SOURCE);
 }
 
+function normalizeDateTimeParam(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const normalized = raw.includes('T') ? raw.replace('T', ' ') : raw;
+  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$/.test(normalized)) {
+    return `${normalized}:00`;
+  }
+  return normalized;
+}
+
 function extractResultArray(payload) {
   if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.data?.results)) return payload.data.results;
@@ -142,19 +182,26 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
     [`/irc/api/logs${suffix}`, `/api/irclog/search${suffix}`],
     {},
     fallbackError,
-    [404, 500, 502, 503]
+    [404, 500, 502, 503],
+    { includeAuth: false }
   );
 }
 
 export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom = '', dateTo = '') {
+  const normalizedDateFrom = normalizeDateTimeParam(dateFrom);
+  const normalizedDateTo = normalizeDateTimeParam(dateTo);
   const params = new URLSearchParams();
   appendIfPresent(params, 'q', query);
   appendIfPresent(params, 'network_id', networkId);
   appendIfPresent(params, 'channel_id', channelId);
-  appendIfPresent(params, 'date_from', dateFrom);
-  appendIfPresent(params, 'date_to', dateTo);
-  if (dateFrom && dateTo && dateFrom === dateTo) {
-    appendIfPresent(params, 'date', dateFrom);
+  appendIfPresent(params, 'datetime_from', normalizedDateFrom);
+  appendIfPresent(params, 'datetime_to', normalizedDateTo);
+  const dateOnlyFrom = normalizedDateFrom ? normalizedDateFrom.slice(0, 10) : '';
+  const dateOnlyTo = normalizedDateTo ? normalizedDateTo.slice(0, 10) : '';
+  appendIfPresent(params, 'date_from', dateOnlyFrom);
+  appendIfPresent(params, 'date_to', dateOnlyTo);
+  if (dateOnlyFrom && dateOnlyTo && dateOnlyFrom === dateOnlyTo) {
+    appendIfPresent(params, 'date', dateOnlyFrom);
   }
   const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
@@ -169,7 +216,8 @@ export async function advancedSearch(apiKey, body) {
       method: 'POST',
       body: JSON.stringify(requestBody),
     },
-    'Search failed'
+    'Search failed',
+    { includeAuth: false }
   );
   return data || {};
 }
@@ -179,7 +227,8 @@ export async function getHighlights(apiKey) {
     apiKey,
     ['/api/irclog/highlights'],
     {},
-    'Failed to fetch highlights'
+    'Failed to fetch highlights',
+    { includeAuth: true }
   );
   return data || {};
 }
@@ -192,7 +241,8 @@ export async function createHighlight(apiKey, body) {
       method: 'POST',
       body: JSON.stringify(body),
     },
-    'Failed to create highlight'
+    'Failed to create highlight',
+    { includeAuth: true }
   );
   return data || {};
 }
@@ -205,7 +255,8 @@ export async function getNetworks(apiKey) {
     apiKey,
     [`/irc/api/networks${suffix}`, `/api/irclog/networks${suffix}`, `/irclog/networks${suffix}`],
     {},
-    'Failed to fetch networks'
+    'Failed to fetch networks',
+    { includeAuth: false }
   );
   return data || {};
 }
@@ -222,7 +273,8 @@ export async function getNetworkChannels(apiKey, networkId) {
       `/irclog/networks/${networkId}/channels${suffix}`,
     ],
     {},
-    'Failed to fetch channels'
+    'Failed to fetch channels',
+    { includeAuth: false }
   );
   return data || {};
 }
