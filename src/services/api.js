@@ -1,3 +1,5 @@
+import { updateBackendAuthModeFromHeaders } from './authMode';
+
 // Configurable API base URL
 // Production: tools.tornevall.net
 // Staging: tools.tornevall.com
@@ -18,6 +20,7 @@ export async function simpleSearch(apiKey, query, channelId) {
     headers: getHeaders(apiKey),
     signal: AbortSignal.timeout(30000),
   });
+  updateBackendAuthModeFromHeaders(res.headers);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Search failed');
   return data;
@@ -30,6 +33,7 @@ export async function advancedSearch(apiKey, body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30000),
   });
+  updateBackendAuthModeFromHeaders(res.headers);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Search failed');
   return data;
@@ -40,6 +44,7 @@ export async function getHighlights(apiKey) {
     headers: getHeaders(apiKey),
     signal: AbortSignal.timeout(30000),
   });
+  updateBackendAuthModeFromHeaders(res.headers);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to fetch highlights');
   return data;
@@ -52,6 +57,7 @@ export async function createHighlight(apiKey, body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30000),
   });
+  updateBackendAuthModeFromHeaders(res.headers);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to create highlight');
   return data;

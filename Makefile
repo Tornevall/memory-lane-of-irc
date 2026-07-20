@@ -42,6 +42,13 @@ install:
 		echo "ERROR: npm missing and apt-get unavailable. Install Node.js/npm manually."; \
 		exit 1; \
 	fi
+	@if [ ! -f .env ] && [ -f .env.example ]; then \
+		cp .env.example .env; \
+		echo "Created .env from .env.example (production bootstrap)."; \
+		if ! grep -q '^VITE_APP_ENV=' .env; then \
+			echo 'VITE_APP_ENV=production' >> .env; \
+		fi; \
+	fi
 	$(NPM) install --no-audit --no-fund
 
 dev:

@@ -20,6 +20,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Updated API docs to reflect optional auth for read endpoints and required auth for write endpoints.
 - Updated `make install` bootstrap flow: tries `apt-get install nodejs` first (avoids common Ubuntu `npm` package conflicts), then NodeSource fallback when `npm` is still missing.
 - Added trusted-host auth detection (`tools.tornevall.com` / `tools.tornevall.net`) so frontend can treat API key as optional there, including write-access UI state.
+- Updated installer bootstrap: if `.env` is missing, `make install` now copies `.env.example` and appends `VITE_APP_ENV=production`.
+- Added backend-driven auth-mode hint support via response headers (`X-Irclog-Auth-Mode` / `X-Irclog-Api-Key-Required`) with hostname fallback.
 
 ## [2026-07-20]
 

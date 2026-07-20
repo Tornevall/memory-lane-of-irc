@@ -10,6 +10,8 @@ This document defines implementation rules for `public/irclogs-react` as a stand
   when data loading is AJAX-driven.
 - Never assume destructive migration support from this frontend. Any backend migration-related implementation must preserve
   existing IRC log tables and data; no purge/drop/fresh/reset semantics.
+- Auth mode should be backend-driven when possible: frontend may use host-based defaults, but should prefer explicit backend
+  hints (for example response headers indicating whether API key is required) to avoid environment drift.
 
 ## Import/Review Workflow Contract (Backend-Assisted)
 
