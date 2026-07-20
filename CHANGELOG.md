@@ -30,6 +30,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added `index.source.html` + `make ensure-source-index`; `make build` now restores source index before Vite build so deploy-generated index files do not break future builds.
 - Switched default Vite base to relative (`./`) so JS/CSS always resolve from the deployed React root, preventing wrong absolute `/assets/*` requests on mixed hosts.
 - Tightened base-path logic further: build now ignores legacy `BASE_URL` and only honors explicit `VITE_BASE_URL` override; default remains auto-resolving relative assets.
+- Added router basename auto-detection for `/irclogs-react` so React routes resolve correctly in subdirectory deployments (`no routes matched location` fixed).
 - Added network + channel selectors on the Search start page (loaded from `/api/irclog/networks` and `/api/irclog/networks/{id}/channels`) so filtering can start before first query.
 
 ## [2026-07-20]

@@ -5,9 +5,22 @@ import HighlightsPage from './pages/HighlightsPage';
 import DocsPage from './pages/DocsPage';
 import './App.css';
 
+function detectRouterBase() {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+  const path = window.location.pathname || '/';
+  if (path === '/irclogs-react' || path.startsWith('/irclogs-react/')) {
+    return '/irclogs-react';
+  }
+  return '/';
+}
+
 export default function App() {
+  const routerBase = detectRouterBase();
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBase}>
       <nav className="navbar">
         <div className="navbar-brand">
           <span className="brand-icon">📻</span>
