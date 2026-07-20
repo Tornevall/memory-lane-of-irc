@@ -1,13 +1,15 @@
 NPM ?= npm
+SOURCE_INDEX ?= index.source.html
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install-npm install dev build deploy rebuild clean preview lint
+.PHONY: help install-npm install ensure-source-index dev build deploy rebuild clean preview lint
 
 help:
 	@echo "Available targets:"
 	@echo "  make install-npm - Ensure npm exists (apt-get/nodejs + NodeSource fallback)"
 	@echo "  make install     - Bootstrap .env + install dependencies"
+	@echo "  make ensure-source-index - Restore source index.html before build"
 	@echo "  make dev      - Start Vite dev server"
 	@echo "  make build    - Build production bundle to dist/"
 	@echo "  make deploy   - Publish dist/ to webroot (index.html, assets, vite.svg)"
@@ -56,10 +58,23 @@ install: install-npm
 	fi
 	$(NPM) install --no-audit --no-fund
 
+ensure-source-index:
+	@if [ ! -f "$(SOURCE_INDEX)" ]; then \
+		if grep -q '/src/main.jsx' index.html; then \
+			cp -f index.html "$(SOURCE_INDEX)"; \
+			echo "Created $(SOURCE_INDEX) from current source index."; \
+		else \
+			echo "ERROR: $(SOURCE_INDEX) missing and index.html is not source template."; \
+			echo "Restore source index first, then rerun make build."; \
+			exit 1; \
+		fi; \
+	fi
+	@cp -f "$(SOURCE_INDEX)" index.html
+
 dev:
 	$(NPM) run dev
 
-build:
+build: ensure-source-index
 	$(NPM) run build
 
 deploy: build
