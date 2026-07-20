@@ -4,9 +4,11 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const rawBase = (env.BASE_URL || env.VITE_BASE_URL || '/').trim()
-  const normalizedBase = rawBase === '' ? '/' : (rawBase.startsWith('/') ? rawBase : `/${rawBase}`)
-  const finalBase = normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`
+  const rawBase = (env.BASE_URL || env.VITE_BASE_URL || './').trim()
+  let finalBase = rawBase === '' ? './' : rawBase
+  if (finalBase !== './' && finalBase !== '/' && !finalBase.endsWith('/')) {
+    finalBase = `${finalBase}/`
+  }
 
   return {
     plugins: [react()],

@@ -28,6 +28,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed asset base-path handling: Vite base now comes from env (`BASE_URL` / `VITE_BASE_URL`) so root hosts and subdirectory hosts both resolve JS/CSS correctly without `/missing/` redirects.
 - Added `make clean` target to remove build artifacts (`dist/`) and Vite cache (`node_modules/.vite`).
 - Added `index.source.html` + `make ensure-source-index`; `make build` now restores source index before Vite build so deploy-generated index files do not break future builds.
+- Switched default Vite base to relative (`./`) so JS/CSS always resolve from the deployed React root, preventing wrong absolute `/assets/*` requests on mixed hosts.
 
 ## [2026-07-20]
 
