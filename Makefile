@@ -2,18 +2,19 @@ NPM ?= npm
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build rebuild preview lint
+.PHONY: help install-npm install dev build rebuild preview lint
 
 help:
 	@echo "Available targets:"
-	@echo "  make install  - Ensure npm exists (apt-get/nodejs + NodeSource fallback) + install deps"
+	@echo "  make install-npm - Ensure npm exists (apt-get/nodejs + NodeSource fallback)"
+	@echo "  make install     - Bootstrap .env + install dependencies"
 	@echo "  make dev      - Start Vite dev server"
 	@echo "  make build    - Build production bundle"
 	@echo "  make rebuild  - Install + build"
 	@echo "  make preview  - Preview built app"
 	@echo "  make lint     - Run ESLint"
 
-install:
+install-npm:
 	@if command -v $(NPM) >/dev/null 2>&1; then \
 		echo "Found npm: $$($(NPM) --version)"; \
 	elif command -v apt-get >/dev/null 2>&1; then \
@@ -42,6 +43,8 @@ install:
 		echo "ERROR: npm missing and apt-get unavailable. Install Node.js/npm manually."; \
 		exit 1; \
 	fi
+
+install: install-npm
 	@if [ ! -f .env ] && [ -f .env.example ]; then \
 		cp .env.example .env; \
 		echo "Created .env from .env.example (production bootstrap)."; \
