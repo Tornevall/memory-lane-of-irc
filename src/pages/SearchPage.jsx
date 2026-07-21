@@ -106,12 +106,75 @@ function renderMircText(input) {
   return out;
 }
 
-function buildRowIdentity(result) {
+function pushParam(params, key, value) {
+  const normalized = String(value ?? '').trim();
+  if (normalized) {
+    params.set(key, normalized);
+  }
+}
+
+function buildSearchParamsFromCriteria(criteria) {
+  const normalizedMode = criteria?.mode === 'advanced' ? 'advanced' : 'simple';
+  const params = new URLSearchParams();
+  params.set('mode', normalizedMode);
+  if (criteria?.resultView === 'refined') {
+    params.set('view', 'refined');
+  }
+
+  pushParam(params, 'q', criteria?.query);
+  pushParam(params, 'network', criteria?.networkId);
+  pushParam(params, 'channel', criteria?.channelId);
+
+  if (normalizedMode === 'simple') {
+    pushParam(params, 'from', criteria?.simpleDateTimeFrom);
+    pushParam(params, 'to', criteria?.simpleDateTimeTo);
+  } else {
+    pushParam(params, 'nick', criteria?.nick);
+    pushParam(params, 'date_from', criteria?.dateFrom);
+    pushParam(params, 'date_to', criteria?.dateTo);
+    pushParam(params, 'limit', criteria?.limit);
+    pushParam(params, 'page', criteria?.page);
+  }
+
+  return params.toString();
+}
+
+function parseCriteriaFromLocation(searchText) {
+  const params = new URLSearchParams(String(searchText || ''));
+  const mode = params.get('mode') === 'advanced' ? 'advanced' : 'simple';
+  const view = params.get('view') === 'refined' ? 'refined' : 'classic';
+  const rawLimit = Number.parseInt(params.get('limit') || '', 10);
+  const rawPage = Number.parseInt(params.get('page') || '', 10);
+  return {
+    mode,
+    resultView: view,
+    query: params.get('q') || '',
+    networkId: params.get('network') || '',
+    channelId: params.get('channel') || '',
+    simpleDateTimeFrom: params.get('from') || '',
+    simpleDateTimeTo: params.get('to') || '',
+    nick: params.get('nick') || '',
+    dateFrom: params.get('date_from') || '',
+    dateTo: params.get('date_to') || '',
+    limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 1000) : 50,
+    page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
+  };
+}
+
+function shouldAutoSearchFromCriteria(criteria) {
+  if (criteria.mode === 'advanced') {
+    return String(criteria.query || '').trim().length > 0;
+  }
+  return String(criteria.query || '').trim().length > 0 || String(criteria.channelId || '').trim().length > 0;
+}
+
+function buildRowIdentity(result, shareSearchQueryString = '') {
   const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
   const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const searchPart = shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || '');
   return {
     rowId,
-    rowHref: `${window.location.pathname}${window.location.search}#${rowId}`,
+    rowHref: `${window.location.pathname}${searchPart}#${rowId}`,
     hasHashMatch: String(window.location.hash || '') === `#${rowId}`,
   };
 }
@@ -127,8 +190,8 @@ function formatShortTime(value) {
   return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
 }
 
-function RefinedResultRow({ result }) {
-  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result);
+function RefinedResultRow({ result, shareSearchQueryString }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString);
   const rawText = String(result.raw_line ?? result.message ?? '');
   const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
@@ -156,8 +219,8 @@ function RefinedResultRow({ result }) {
   );
 }
 
-function ClassicResultRow({ result }) {
-  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result);
+function ClassicResultRow({ result, shareSearchQueryString }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString);
   const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
   const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
@@ -298,6 +361,7 @@ export default function SearchPage() {
   const [simpleMaxDateTime, setSimpleMaxDateTime] = useState('');
   const [loadingDateRange, setLoadingDateRange] = useState(false);
   const [results, setResults] = useState(null);
+  const [lastSearchQueryString, setLastSearchQueryString] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const channelsRequestSeqRef = useRef(0);
@@ -354,10 +418,10 @@ export default function SearchPage() {
     return channel ? getEntityName(channel, 'Channel') : '';
   }
 
-  function normalizeResultRows(payload) {
+  function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
-    const selectedNetworkLabel = getNetworkLabelById(networkId);
-    const selectedChannelLabel = getChannelLabelById(channelId);
+    const selectedNetworkLabel = getNetworkLabelById(selectedNetworkId);
+    const selectedChannelLabel = getChannelLabelById(selectedChannelId);
     return rows.map((row) => ({
       ...row,
       ...(function mapIdentity(rawRow) {
@@ -443,7 +507,8 @@ export default function SearchPage() {
     }
   }
 
-  async function loadChannels(selectedNetworkId) {
+  async function loadChannels(selectedNetworkId, options = {}) {
+    const { preserveDateRange = false } = options;
     channelsRequestSeqRef.current += 1;
     const requestSeq = channelsRequestSeqRef.current;
     if (!selectedNetworkId) {
@@ -473,10 +538,12 @@ export default function SearchPage() {
       channelsCacheRef.current.set(cacheKey, loadedChannels);
       setChannels(loadedChannels);
       setChannelsReady(true);
-      setSimpleDateTimeFrom('');
-      setSimpleDateTimeTo('');
-      setSimpleMinDateTime('');
-      setSimpleMaxDateTime('');
+      if (!preserveDateRange) {
+        setSimpleDateTimeFrom('');
+        setSimpleDateTimeTo('');
+        setSimpleMinDateTime('');
+        setSimpleMaxDateTime('');
+      }
     } catch (err) {
       if (requestSeq !== channelsRequestSeqRef.current) {
         return;
@@ -500,6 +567,42 @@ export default function SearchPage() {
   }, []);
 
   useEffect(() => {
+    const parsedCriteria = parseCriteriaFromLocation(window.location.search || '');
+    setMode(parsedCriteria.mode);
+    setResultView(parsedCriteria.resultView);
+    setQuery(parsedCriteria.query);
+    setNetworkId(parsedCriteria.networkId);
+    setChannelId(parsedCriteria.channelId);
+    setSimpleDateTimeFrom(parsedCriteria.simpleDateTimeFrom);
+    setSimpleDateTimeTo(parsedCriteria.simpleDateTimeTo);
+    setNick(parsedCriteria.nick);
+    setDateFrom(parsedCriteria.dateFrom);
+    setDateTo(parsedCriteria.dateTo);
+    setLimit(parsedCriteria.limit);
+    setPage(parsedCriteria.page);
+
+    const initialQueryString = buildSearchParamsFromCriteria(parsedCriteria);
+    if (initialQueryString) {
+      setLastSearchQueryString(initialQueryString);
+    }
+    if (parsedCriteria.networkId) {
+      loadChannels(parsedCriteria.networkId, { preserveDateRange: true });
+    }
+    if (
+      parsedCriteria.networkId
+      && parsedCriteria.channelId
+      && parsedCriteria.mode === 'simple'
+      && !parsedCriteria.simpleDateTimeFrom
+      && !parsedCriteria.simpleDateTimeTo
+    ) {
+      loadDateRange(parsedCriteria.networkId, parsedCriteria.channelId);
+    }
+    if (shouldAutoSearchFromCriteria(parsedCriteria)) {
+      executeSearch(parsedCriteria, { updateUrl: false });
+    }
+  }, []);
+
+  useEffect(() => {
     const hash = String(window.location.hash || '');
     if (!hash || !results?.results?.length) return;
     const target = document.getElementById(hash.slice(1));
@@ -508,40 +611,88 @@ export default function SearchPage() {
     }
   }, [results]);
 
-  async function handleSearch(e) {
-    e.preventDefault();
+  async function executeSearch(criteria, options = {}) {
     const apiKey = getApiKey();
+    const { updateUrl = true } = options;
+    const normalizedCriteria = {
+      mode: criteria?.mode === 'advanced' ? 'advanced' : 'simple',
+      resultView: criteria?.resultView === 'refined' ? 'refined' : 'classic',
+      query: String(criteria?.query ?? ''),
+      networkId: String(criteria?.networkId ?? ''),
+      channelId: String(criteria?.channelId ?? ''),
+      simpleDateTimeFrom: String(criteria?.simpleDateTimeFrom ?? ''),
+      simpleDateTimeTo: String(criteria?.simpleDateTimeTo ?? ''),
+      nick: String(criteria?.nick ?? ''),
+      dateFrom: String(criteria?.dateFrom ?? ''),
+      dateTo: String(criteria?.dateTo ?? ''),
+      limit: Number(criteria?.limit ?? 50),
+      page: Number(criteria?.page ?? 1),
+    };
+    const shareQueryString = buildSearchParamsFromCriteria(normalizedCriteria);
+    setLastSearchQueryString(shareQueryString);
+    if (updateUrl) {
+      const searchPart = shareQueryString ? `?${shareQueryString}` : '';
+      const currentHash = String(window.location.hash || '');
+      window.history.replaceState(null, '', `${window.location.pathname}${searchPart}${currentHash}`);
+    }
+
     setLoading(true);
     setError('');
     setResults(null);
     try {
       let data;
-      if (mode === 'simple') {
-        const trimmedQuery = String(query || '').trim();
-        if (!trimmedQuery && !channelId) {
+      if (normalizedCriteria.mode === 'simple') {
+        const trimmedQuery = String(normalizedCriteria.query || '').trim();
+        if (!trimmedQuery && !normalizedCriteria.channelId) {
           throw new Error('Choose a channel to open chat logs directly, or enter a query.');
         }
-        const effectiveFrom = simpleDateTimeFrom && simpleDateTimeTo && simpleDateTimeFrom > simpleDateTimeTo ? simpleDateTimeTo : simpleDateTimeFrom;
-        const effectiveTo = simpleDateTimeFrom && simpleDateTimeTo && simpleDateTimeFrom > simpleDateTimeTo ? simpleDateTimeFrom : simpleDateTimeTo;
-        data = await simpleSearch(apiKey, trimmedQuery, channelId, networkId, effectiveFrom, effectiveTo);
+        const effectiveFrom = normalizedCriteria.simpleDateTimeFrom
+          && normalizedCriteria.simpleDateTimeTo
+          && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
+          ? normalizedCriteria.simpleDateTimeTo
+          : normalizedCriteria.simpleDateTimeFrom;
+        const effectiveTo = normalizedCriteria.simpleDateTimeFrom
+          && normalizedCriteria.simpleDateTimeTo
+          && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
+          ? normalizedCriteria.simpleDateTimeFrom
+          : normalizedCriteria.simpleDateTimeTo;
+        data = await simpleSearch(apiKey, trimmedQuery, normalizedCriteria.channelId, normalizedCriteria.networkId, effectiveFrom, effectiveTo);
       } else {
-        const body = { query, limit: Number(limit), page: Number(page) };
-        if (networkId) body.network_id = Number(networkId);
-        if (channelId) body.channel_id = Number(channelId);
-        if (nick) body.nick = nick;
-        if (dateFrom) body.date_from = dateFrom;
-        if (dateTo) body.date_to = dateTo;
+        const body = { query: normalizedCriteria.query, limit: Number(normalizedCriteria.limit), page: Number(normalizedCriteria.page) };
+        if (normalizedCriteria.networkId) body.network_id = Number(normalizedCriteria.networkId);
+        if (normalizedCriteria.channelId) body.channel_id = Number(normalizedCriteria.channelId);
+        if (normalizedCriteria.nick) body.nick = normalizedCriteria.nick;
+        if (normalizedCriteria.dateFrom) body.date_from = normalizedCriteria.dateFrom;
+        if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
         data = await advancedSearch(apiKey, body);
       }
       setResults({
         ...data,
-        results: normalizeResultRows(data),
+        results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
       });
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSearch(e) {
+    e.preventDefault();
+    await executeSearch({
+      mode,
+      resultView,
+      query,
+      networkId,
+      channelId,
+      simpleDateTimeFrom,
+      simpleDateTimeTo,
+      nick,
+      dateFrom,
+      dateTo,
+      limit,
+      page,
+    });
   }
 
   return (
@@ -737,8 +888,8 @@ export default function SearchPage() {
           {results.results?.map((r) => (
             // Keep keys stable even if some legacy rows lack numeric id.
             resultView === 'classic'
-              ? <ClassicResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} />
-              : <RefinedResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} />
+              ? <ClassicResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} shareSearchQueryString={lastSearchQueryString} />
+              : <RefinedResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} shareSearchQueryString={lastSearchQueryString} />
           ))}
         </div>
       )}
