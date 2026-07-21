@@ -11,6 +11,8 @@ const TRUSTED_HOSTS = new Set([
 const READ_SOURCE = String(import.meta.env.VITE_IRCLOG_READ_SOURCE || 'production').trim().toLowerCase() === 'sandbox'
   ? 'sandbox'
   : 'production';
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+const LOG_QUERY_TIMEOUT_MS = 120000;
 
 function normalizeBaseUrl(raw) {
   const base = String(raw || '').trim();
@@ -92,6 +94,9 @@ async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError
   let lastStatus = null;
   const fallbackStatusSet = new Set(fallbackStatuses);
   const hasBody = typeof init.body !== 'undefined' && init.body !== null;
+  const timeoutMs = Number.isFinite(Number(options.timeoutMs)) && Number(options.timeoutMs) > 0
+    ? Number(options.timeoutMs)
+    : DEFAULT_REQUEST_TIMEOUT_MS;
   const headers = getHeaders(apiKey, {
     includeContentType: hasBody,
     includeAuth: options.includeAuth === true,
@@ -105,7 +110,7 @@ async function fetchWithFallbackByStatus(apiKey, paths, init = {}, fallbackError
           ...headers,
           ...(init.headers || {}),
         },
-        signal: init.signal || AbortSignal.timeout(30000),
+        signal: init.signal || AbortSignal.timeout(timeoutMs),
         redirect: init.redirect || 'manual',
       });
     } catch (error) {
@@ -192,7 +197,7 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
     {},
     fallbackError,
     [404],
-    { includeAuth: false }
+    { includeAuth: false, timeoutMs: LOG_QUERY_TIMEOUT_MS }
   );
 }
 
