@@ -436,6 +436,16 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   flex-wrap: wrap;
 }
 
+.result-date-separator {
+  margin: 0.9rem 0 0.2rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2d3148;
+  color: #64748b;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .classic-row {
   background: #101215;
   border: 1px solid #2d3148;

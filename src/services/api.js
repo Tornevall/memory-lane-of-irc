@@ -144,6 +144,22 @@ function appendIfPresent(params, key, value) {
   }
 }
 
+function toPositiveInt(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
+function appendPagination(params, limit, page) {
+  const normalizedLimit = toPositiveInt(limit, 0);
+  if (normalizedLimit > 0) {
+    params.append('limit', String(normalizedLimit));
+  }
+  const normalizedPage = toPositiveInt(page, 1);
+  const offset = normalizedLimit > 0 ? Math.max(0, (normalizedPage - 1) * normalizedLimit) : 0;
+  params.append('offset', String(offset));
+}
+
 function appendReadSource(params) {
   appendIfPresent(params, 'source', READ_SOURCE);
 }
@@ -187,8 +203,7 @@ export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom
   appendIfPresent(params, 'q', query);
   appendIfPresent(params, 'network_id', networkId);
   appendIfPresent(params, 'channel_id', channelId);
-  appendIfPresent(params, 'limit', limit);
-  appendIfPresent(params, 'page', page);
+  appendPagination(params, limit, page);
   appendIfPresent(params, 'datetime_from', normalizedDateFrom);
   appendIfPresent(params, 'datetime_to', normalizedDateTo);
   const dateOnlyFrom = normalizedDateFrom ? normalizedDateFrom.slice(0, 10) : '';
@@ -210,8 +225,7 @@ export async function advancedSearch(apiKey, body) {
   appendIfPresent(params, 'nick', body?.nick);
   appendIfPresent(params, 'date_from', body?.date_from);
   appendIfPresent(params, 'date_to', body?.date_to);
-  appendIfPresent(params, 'limit', body?.limit);
-  appendIfPresent(params, 'page', body?.page);
+  appendPagination(params, body?.limit, body?.page);
   const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
 }

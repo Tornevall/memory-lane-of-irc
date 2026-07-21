@@ -227,6 +227,16 @@ function formatShortTime(value) {
   return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
 }
 
+function extractIsoDate(value) {
+  if (!value) return '';
+  const raw = String(value);
+  const direct = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (direct) return direct[1];
+  const dt = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 function RefinedResultRow({ result, shareSearchQueryString }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString);
   const rawText = String(result.raw_line ?? result.message ?? '');
@@ -267,7 +277,9 @@ function ClassicResultRow({ result, shareSearchQueryString }) {
   const nickPart = nick ? `<${nick}>` : '';
   const wherePart = channel ? ` ${channel}` : '';
   const hostPart = userHost ? ` (${userHost})` : '';
-  const prefix = `[${formatShortTime(result.occurred_at)}] [${eventType}]`;
+  const entryDate = extractIsoDate(result.occurred_at);
+  const entryYear = entryDate ? entryDate.slice(0, 4) : '';
+  const prefix = `[${formatShortTime(result.occurred_at)}${entryYear ? ` ${entryYear}` : ''}] [${eventType}]`;
 
   return (
     <div id={rowId} className={`classic-row ${hasHashMatch ? 'is-target-row' : ''}`}>
@@ -983,8 +995,10 @@ export default function SearchPage() {
           {(() => {
             const rows = Array.isArray(results.results) ? results.results : [];
             const total = Number.parseInt(String(results.total ?? rows.length ?? 0), 10) || 0;
-            const currentPage = Math.max(1, Number.parseInt(String(results.page ?? page ?? 1), 10) || 1);
             const currentLimit = normalizePageSize(results.limit ?? limit);
+            const offsetFromResponse = Math.max(0, Number.parseInt(String(results.offset ?? 0), 10) || 0);
+            const pageFromOffset = Math.floor(offsetFromResponse / Math.max(1, currentLimit)) + 1;
+            const currentPage = Math.max(1, Number.parseInt(String(results.page ?? pageFromOffset ?? page ?? 1), 10) || 1);
             const maxPageByTotal = total > 0 ? Math.max(1, Math.ceil(total / Math.max(1, currentLimit))) : currentPage;
             const hasPrev = currentPage > 1;
             const hasNext = total > 0
@@ -1017,12 +1031,29 @@ export default function SearchPage() {
             </div>
           </div>
           {results.results?.length === 0 && <p>No results found.</p>}
-          {results.results?.map((r) => (
-            // Keep keys stable even if some legacy rows lack numeric id.
-            resultView === 'classic'
-              ? <ClassicResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} shareSearchQueryString={lastSearchQueryString} />
-              : <RefinedResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} shareSearchQueryString={lastSearchQueryString} />
-          ))}
+          {(() => {
+            const rows = Array.isArray(results.results) ? results.results : [];
+            const rendered = [];
+            let previousDate = '';
+            rows.forEach((row, idx) => {
+              const rowDate = extractIsoDate(row?.occurred_at);
+              if (rowDate && rowDate !== previousDate) {
+                rendered.push(
+                  <div key={`date-separator-${rowDate}-${idx}`} className="result-date-separator">
+                    {rowDate}
+                  </div>
+                );
+                previousDate = rowDate;
+              }
+              const rowKey = String(row.id ?? row.log_event_id ?? `${row.occurred_at}-${row.nick}-${row.event_type}`);
+              rendered.push(
+                resultView === 'classic'
+                  ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} />
+                  : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} />
+              );
+            });
+            return rendered;
+          })()}
         </div>
       )}
     </div>
