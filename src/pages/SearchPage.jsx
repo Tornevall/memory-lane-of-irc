@@ -344,6 +344,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
   const [networks, setNetworks] = useState([]);
   const [channels, setChannels] = useState([]);
   const [networksReady, setNetworksReady] = useState(false);
@@ -367,6 +368,7 @@ export default function SearchPage() {
   const channelsRequestSeqRef = useRef(0);
   const channelsCacheRef = useRef(new Map());
   const readSource = getReadSource();
+  const normalizedChannelFilter = String(channelFilter || '').trim().toLowerCase();
 
   function extractArray(payload, preferredKey) {
     if (Array.isArray(payload)) {
@@ -417,6 +419,27 @@ export default function SearchPage() {
     const channel = channels.find((c) => String(getEntityId(c)) === wanted);
     return channel ? getEntityName(channel, 'Channel') : '';
   }
+
+  function getFilteredChannels() {
+    const allChannels = Array.isArray(channels) ? channels : [];
+    if (!normalizedChannelFilter) {
+      return allChannels;
+    }
+
+    return allChannels.filter((channel) => {
+      const id = String(getEntityId(channel) || '').toLowerCase();
+      const name = String(getEntityName(channel, 'Channel') || '').toLowerCase();
+      return id.includes(normalizedChannelFilter) || name.includes(normalizedChannelFilter);
+    });
+  }
+
+  const filteredChannels = getFilteredChannels();
+  const selectedChannelInFilter = !channelId
+    || filteredChannels.some((channel) => String(getEntityId(channel)) === String(channelId));
+  const selectedChannelObject = !selectedChannelInFilter
+    ? channels.find((channel) => String(getEntityId(channel)) === String(channelId))
+    : null;
+  const channelOptions = selectedChannelObject ? [selectedChannelObject, ...filteredChannels] : filteredChannels;
 
   function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
@@ -732,6 +755,7 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
+              setChannelFilter('');
               setChannels([]);
               setChannelsReady(false);
               setSimpleDateTimeFrom('');
@@ -755,6 +779,13 @@ export default function SearchPage() {
         </div>
         <div className="form-row">
           <label>Channel (optional)</label>
+          <input
+            type="text"
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+            placeholder={networkId ? 'Filter channels (name or id)...' : 'Select network first'}
+            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
+          />
           <select
             value={channelId}
             onChange={(e) => {
@@ -778,7 +809,7 @@ export default function SearchPage() {
                 ? 'Loading channels...'
                 : (networkId ? (channelsReady ? 'All channels in selected network' : 'Loading channels...') : 'Select network first')}
             </option>
-            {channels.map((channel) => (
+            {channelOptions.map((channel) => (
               <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
                 {getEntityName(channel, 'Channel')}
               </option>
@@ -786,6 +817,10 @@ export default function SearchPage() {
           </select>
           {networkId && loadingChannels && <small className="loading-hint"><span className="loading-spinner" />Loading channels...</small>}
           {networkId && !loadingChannels && channels.length === 0 && <small>No channels found for selected network.</small>}
+          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length === 0 && <small>No channels match your filter.</small>}
+          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length > 0 && (
+            <small>Showing {channelOptions.length} of {channels.length} channels.</small>
+          )}
           {!loadingChannels && channelId && (
             <small>Reading from: {readSource}</small>
           )}
