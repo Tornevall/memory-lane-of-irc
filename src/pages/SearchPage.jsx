@@ -35,122 +35,110 @@ function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function ResultRow({ result }) {
+const mircPalette = [
+  '#ffffff', '#000000', '#1f4fff', '#3fb950', '#ff4d4f', '#7c8cf8', '#8b5cf6', '#f59e0b',
+  '#facc15', '#22c55e', '#2dd4bf', '#38bdf8', '#60a5fa', '#ec4899', '#94a3b8', '#d1d5db',
+];
+
+function styleFromState(state) {
+  const style = {
+    fontWeight: state.bold ? 700 : 400,
+    fontStyle: state.italic ? 'italic' : 'normal',
+    textDecoration: state.underline ? 'underline' : 'none',
+  };
+  if (Number.isInteger(state.fg)) {
+    style.color = mircPalette[state.fg % mircPalette.length];
+  }
+  if (Number.isInteger(state.bg)) {
+    style.backgroundColor = mircPalette[state.bg % mircPalette.length];
+  }
+  return style;
+}
+
+function renderMircText(input) {
+  const text = String(input || '');
+  const out = [];
+  let buffer = '';
+  let key = 0;
+  let state = { bold: false, italic: false, underline: false, fg: null, bg: null };
+
+  const flush = () => {
+    if (!buffer) return;
+    out.push(
+      <span key={`m-${key++}`} style={styleFromState(state)}>
+        {buffer}
+      </span>
+    );
+    buffer = '';
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    const code = ch.charCodeAt(0);
+
+    if (code === 2) { flush(); state = { ...state, bold: !state.bold }; continue; }
+    if (code === 29) { flush(); state = { ...state, italic: !state.italic }; continue; }
+    if (code === 31) { flush(); state = { ...state, underline: !state.underline }; continue; }
+    if (code === 15) { flush(); state = { bold: false, italic: false, underline: false, fg: null, bg: null }; continue; }
+    if (code === 22) { flush(); state = { ...state, fg: state.bg, bg: state.fg }; continue; }
+    if (code === 3) {
+      flush();
+      let j = i + 1;
+      let fgDigits = '';
+      while (j < text.length && fgDigits.length < 2 && /[0-9]/.test(text[j])) { fgDigits += text[j]; j += 1; }
+      let bgDigits = '';
+      if (j < text.length && text[j] === ',') {
+        j += 1;
+        while (j < text.length && bgDigits.length < 2 && /[0-9]/.test(text[j])) { bgDigits += text[j]; j += 1; }
+      }
+      if (fgDigits.length > 0) {
+        state = { ...state, fg: Number.parseInt(fgDigits, 10), bg: bgDigits.length > 0 ? Number.parseInt(bgDigits, 10) : null };
+      } else {
+        state = { ...state, fg: null, bg: null };
+      }
+      i = j - 1;
+      continue;
+    }
+    buffer += ch;
+  }
+
+  flush();
+  return out;
+}
+
+function buildRowIdentity(result) {
   const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
   const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const rowHref = `${window.location.pathname}${window.location.search}#${rowId}`;
-  const hasHashMatch = String(window.location.hash || '') === `#${rowId}`;
+  return {
+    rowId,
+    rowHref: `${window.location.pathname}${window.location.search}#${rowId}`,
+    hasHashMatch: String(window.location.hash || '') === `#${rowId}`,
+  };
+}
+
+function formatShortTime(value) {
+  if (!value) return '--:--';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) {
+    const raw = String(value);
+    const m = raw.match(/\b(\d{2}):(\d{2})(?::\d{2})?\b/);
+    return m ? `${m[1]}:${m[2]}` : '--:--';
+  }
+  return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+}
+
+function RefinedResultRow({ result }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result);
   const rawText = String(result.raw_line ?? result.message ?? '');
   const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
-
-  const mircPalette = [
-    '#ffffff', '#000000', '#1f4fff', '#3fb950', '#ff4d4f', '#7c8cf8', '#8b5cf6', '#f59e0b',
-    '#facc15', '#22c55e', '#2dd4bf', '#38bdf8', '#60a5fa', '#ec4899', '#94a3b8', '#d1d5db',
-  ];
-
-  function styleFromState(state) {
-    const style = {
-      fontWeight: state.bold ? 700 : 400,
-      fontStyle: state.italic ? 'italic' : 'normal',
-      textDecoration: state.underline ? 'underline' : 'none',
-    };
-    if (Number.isInteger(state.fg)) {
-      style.color = mircPalette[state.fg % mircPalette.length];
-    }
-    if (Number.isInteger(state.bg)) {
-      style.backgroundColor = mircPalette[state.bg % mircPalette.length];
-    }
-    return style;
-  }
-
-  function renderMircText(input) {
-    const text = String(input || '');
-    const out = [];
-    let buffer = '';
-    let key = 0;
-    let state = { bold: false, italic: false, underline: false, fg: null, bg: null };
-
-    const flush = () => {
-      if (!buffer) return;
-      out.push(
-        <span key={`m-${key++}`} style={styleFromState(state)}>
-          {buffer}
-        </span>
-      );
-      buffer = '';
-    };
-
-    for (let i = 0; i < text.length; i += 1) {
-      const ch = text[i];
-      const code = ch.charCodeAt(0);
-
-      if (code === 2) { // bold
-        flush();
-        state = { ...state, bold: !state.bold };
-        continue;
-      }
-      if (code === 29) { // italic
-        flush();
-        state = { ...state, italic: !state.italic };
-        continue;
-      }
-      if (code === 31) { // underline
-        flush();
-        state = { ...state, underline: !state.underline };
-        continue;
-      }
-      if (code === 15) { // reset
-        flush();
-        state = { bold: false, italic: false, underline: false, fg: null, bg: null };
-        continue;
-      }
-      if (code === 22) { // reverse
-        flush();
-        state = { ...state, fg: state.bg, bg: state.fg };
-        continue;
-      }
-      if (code === 3) { // color
-        flush();
-        let j = i + 1;
-        let fgDigits = '';
-        while (j < text.length && fgDigits.length < 2 && /[0-9]/.test(text[j])) {
-          fgDigits += text[j];
-          j += 1;
-        }
-        let bgDigits = '';
-        if (j < text.length && text[j] === ',') {
-          j += 1;
-          while (j < text.length && bgDigits.length < 2 && /[0-9]/.test(text[j])) {
-            bgDigits += text[j];
-            j += 1;
-          }
-        }
-        if (fgDigits.length > 0) {
-          state = {
-            ...state,
-            fg: Number.parseInt(fgDigits, 10),
-            bg: bgDigits.length > 0 ? Number.parseInt(bgDigits, 10) : null,
-          };
-        } else {
-          state = { ...state, fg: null, bg: null };
-        }
-        i = j - 1;
-        continue;
-      }
-
-      buffer += ch;
-    }
-
-    flush();
-    return out;
-  }
 
   return (
     <div id={rowId} className={`result-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="result-meta">
         <span className={`event-type ${eventTypeClass}`}>{eventType}</span>
         <span className="nick">{result.nick}</span>
+        {result.user_host && <span className="hostmask">{result.user_host}</span>}
         <span className="channel">{result.channel}</span>
         <span className="network">{result.network}</span>
         <span className="date">{new Date(result.occurred_at).toLocaleString()}</span>
@@ -159,12 +147,40 @@ function ResultRow({ result }) {
       <div className="result-links">
         <a href={rowHref} className="permalink"># Row link</a>
         {result.permalink && (
-          <a
-            href={getPermalinkUrl(result.permalink)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="permalink"
-          >
+          <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink">
+            Permalink ↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClassicResultRow({ result }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result);
+  const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
+  const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
+  const nick = String(result.nick || '').trim();
+  const channel = String(result.channel || '').trim();
+  const userHost = String(result.user_host || '').trim();
+  const nickPart = nick ? `<${nick}>` : '';
+  const wherePart = channel ? ` ${channel}` : '';
+  const hostPart = userHost ? ` (${userHost})` : '';
+  const prefix = `[${formatShortTime(result.occurred_at)}] [${eventType}]`;
+
+  return (
+    <div id={rowId} className={`classic-row ${hasHashMatch ? 'is-target-row' : ''}`}>
+      <div className="classic-main">
+        <span className="classic-prefix">{prefix}</span>
+        {nickPart && <span className="classic-nick"> {nickPart}</span>}
+        {hostPart && <span className="classic-host">{hostPart}</span>}
+        {wherePart && <span className="classic-channel">{wherePart}</span>}
+        {lineBody && <span className="classic-message"> {renderMircText(lineBody)}</span>}
+      </div>
+      <div className="result-links">
+        <a href={rowHref} className="permalink"># Row link</a>
+        {result.permalink && (
+          <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink">
             Permalink ↗
           </a>
         )}
@@ -262,6 +278,7 @@ function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = 
 
 export default function SearchPage() {
   const [mode, setMode] = useState('simple');
+  const [resultView, setResultView] = useState('classic');
   const [query, setQuery] = useState('');
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
@@ -344,6 +361,29 @@ export default function SearchPage() {
     const selectedChannelLabel = getChannelLabelById(channelId);
     return rows.map((row) => ({
       ...row,
+      ...(function mapIdentity(rawRow) {
+        const metadata = typeof rawRow?.metadata_json === 'string'
+          ? (() => { try { return JSON.parse(rawRow.metadata_json); } catch { return {}; } })()
+          : (typeof rawRow?.metadata_json === 'object' && rawRow?.metadata_json !== null ? rawRow.metadata_json : {});
+        const hostmask = String(rawRow?.hostmask ?? metadata?.hostmask ?? '').trim();
+        let user = String(rawRow?.user ?? metadata?.user ?? '').trim();
+        let host = String(rawRow?.host ?? metadata?.host ?? '').trim();
+        if ((!user || !host) && hostmask.includes('@')) {
+          const cleaned = hostmask.startsWith('~') ? hostmask.slice(1) : hostmask;
+          const parts = cleaned.split('@');
+          if (parts.length >= 2) {
+            if (!user) user = String(parts[0] || '').trim();
+            if (!host) host = String(parts.slice(1).join('@') || '').trim();
+          }
+        }
+        const userHost = user && host ? `${user}@${host}` : hostmask;
+        return {
+          user,
+          host,
+          hostmask,
+          user_host: userHost,
+        };
+      }(row)),
       message: row.raw_line ?? row.message ?? row.message_text ?? row.event_text ?? '',
       event_type: row.event_type ?? row.type ?? row.event ?? 'UNKNOWN',
       occurred_at: row.occurred_at ?? row.date ?? row.created_at ?? null,
@@ -684,13 +724,22 @@ export default function SearchPage() {
 
       {results && (
         <div className="results">
-          <div className="results-header">
-            Found {results.total ?? results.results?.length ?? 0} results
-            {results.page && ` (page ${results.page})`}
+          <div className="results-header-row">
+            <div className="results-header">
+              Found {results.total ?? results.results?.length ?? 0} results
+              {results.page && ` (page ${results.page})`}
+            </div>
+            <div className="view-toggle">
+              <button type="button" className={resultView === 'classic' ? 'active' : ''} onClick={() => setResultView('classic')}>Classic log view</button>
+              <button type="button" className={resultView === 'refined' ? 'active' : ''} onClick={() => setResultView('refined')}>Refined cards</button>
+            </div>
           </div>
           {results.results?.length === 0 && <p>No results found.</p>}
           {results.results?.map((r) => (
-            <ResultRow key={r.id} result={r} />
+            // Keep keys stable even if some legacy rows lack numeric id.
+            resultView === 'classic'
+              ? <ClassicResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} />
+              : <RefinedResultRow key={String(r.id ?? r.log_event_id ?? `${r.occurred_at}-${r.nick}-${r.event_type}`)} result={r} />
           ))}
         </div>
       )}

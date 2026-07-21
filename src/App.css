@@ -303,6 +303,35 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   color: #64748b;
 }
 
+.results-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  border: none;
+  background: #1a1d27;
+  color: #94a3b8;
+  padding: 0.32rem 0.72rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.view-toggle button.active {
+  background: #3730a3;
+  color: #c7d2fe;
+}
+
 .result-row {
   background: #1a1d27;
   border: 1px solid #2d3148;
@@ -315,6 +344,11 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
 }
 
 .result-row.is-target-row {
+  border-color: #7c8cf8;
+  box-shadow: 0 0 0 1px #7c8cf8 inset;
+}
+
+.classic-row.is-target-row {
   border-color: #7c8cf8;
   box-shadow: 0 0 0 1px #7c8cf8 inset;
 }
@@ -351,6 +385,7 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
 .event-type.type-nick { background: #3b0764; border-color: #7e22ce; color: #e9d5ff; }
 
 .nick { color: #7c8cf8; font-weight: 700; }
+.hostmask { color: #94a3b8; font-family: 'Consolas', 'Monaco', monospace; }
 .channel { color: #34d399; }
 .network { color: #f59e0b; }
 .date { color: #64748b; margin-left: auto; }
@@ -373,6 +408,27 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   gap: 0.8rem;
   flex-wrap: wrap;
 }
+
+.classic-row {
+  background: #101215;
+  border: 1px solid #2d3148;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.classic-main { color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
+.classic-prefix { color: #94a3b8; }
+.classic-nick { color: #93c5fd; font-weight: 700; }
+.classic-host { color: #64748b; }
+.classic-channel { color: #34d399; }
+.classic-message { color: #e2e8f0; }
 
 .permalink {
   font-size: 0.78rem;
