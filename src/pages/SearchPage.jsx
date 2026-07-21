@@ -159,6 +159,8 @@ function buildSearchParamsFromCriteria(criteria) {
   }
 
   pushParam(params, 'q', criteria?.query);
+  pushParam(params, 'include_terms', criteria?.includeTerms);
+  pushParam(params, 'exclude_terms', criteria?.excludeTerms);
   pushParam(params, 'network', criteria?.networkId);
   pushParam(params, 'channel', criteria?.channelId);
   pushParam(params, 'limit', criteria?.limit);
@@ -186,6 +188,8 @@ function parseCriteriaFromLocation(searchText) {
     mode,
     resultView: view,
     query: params.get('q') || '',
+    includeTerms: params.get('include_terms') || '',
+    excludeTerms: params.get('exclude_terms') || '',
     networkId: params.get('network') || '',
     channelId: params.get('channel') || '',
     simpleDateTimeFrom: params.get('from') || '',
@@ -199,10 +203,12 @@ function parseCriteriaFromLocation(searchText) {
 }
 
 function shouldAutoSearchFromCriteria(criteria) {
+  const hasTermFilters = String(criteria.includeTerms || '').trim().length > 0
+    || String(criteria.excludeTerms || '').trim().length > 0;
   if (criteria.mode === 'advanced') {
-    return String(criteria.query || '').trim().length > 0;
+    return String(criteria.query || '').trim().length > 0 || hasTermFilters;
   }
-  return String(criteria.query || '').trim().length > 0 || String(criteria.channelId || '').trim().length > 0;
+  return String(criteria.query || '').trim().length > 0 || hasTermFilters || String(criteria.channelId || '').trim().length > 0;
 }
 
 function buildRowIdentity(result, shareSearchQueryString = '') {
@@ -391,6 +397,8 @@ export default function SearchPage() {
   const [mode, setMode] = useState('simple');
   const [resultView, setResultView] = useState('classic');
   const [query, setQuery] = useState('');
+  const [includeTerms, setIncludeTerms] = useState('');
+  const [excludeTerms, setExcludeTerms] = useState('');
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
@@ -647,6 +655,8 @@ export default function SearchPage() {
     setMode(parsedCriteria.mode);
     setResultView(parsedCriteria.resultView);
     setQuery(parsedCriteria.query);
+    setIncludeTerms(parsedCriteria.includeTerms);
+    setExcludeTerms(parsedCriteria.excludeTerms);
     setNetworkId(parsedCriteria.networkId);
     setChannelId(parsedCriteria.channelId);
     setSimpleDateTimeFrom(parsedCriteria.simpleDateTimeFrom);
@@ -694,6 +704,8 @@ export default function SearchPage() {
       mode: criteria?.mode === 'advanced' ? 'advanced' : 'simple',
       resultView: criteria?.resultView === 'refined' ? 'refined' : 'classic',
       query: String(criteria?.query ?? ''),
+      includeTerms: String(criteria?.includeTerms ?? ''),
+      excludeTerms: String(criteria?.excludeTerms ?? ''),
       networkId: String(criteria?.networkId ?? ''),
       channelId: String(criteria?.channelId ?? ''),
       simpleDateTimeFrom: String(criteria?.simpleDateTimeFrom ?? ''),
@@ -719,7 +731,9 @@ export default function SearchPage() {
       let data;
       if (normalizedCriteria.mode === 'simple') {
         const trimmedQuery = String(normalizedCriteria.query || '').trim();
-        if (!trimmedQuery && !normalizedCriteria.channelId) {
+        const trimmedIncludeTerms = String(normalizedCriteria.includeTerms || '').trim();
+        const trimmedExcludeTerms = String(normalizedCriteria.excludeTerms || '').trim();
+        if (!trimmedQuery && !trimmedIncludeTerms && !trimmedExcludeTerms && !normalizedCriteria.channelId) {
           throw new Error('Choose a channel to open chat logs directly, or enter a query.');
         }
         const effectiveFrom = normalizedCriteria.simpleDateTimeFrom
@@ -740,11 +754,15 @@ export default function SearchPage() {
           effectiveFrom,
           effectiveTo,
           normalizePageSize(normalizedCriteria.limit),
-          Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1
+          Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
+          trimmedIncludeTerms,
+          trimmedExcludeTerms
         );
       } else {
         const body = {
           query: normalizedCriteria.query,
+          include_terms: normalizedCriteria.includeTerms,
+          exclude_terms: normalizedCriteria.excludeTerms,
           limit: normalizePageSize(normalizedCriteria.limit),
           page: Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
         };
@@ -774,6 +792,8 @@ export default function SearchPage() {
       mode,
       resultView,
       query,
+      includeTerms,
+      excludeTerms,
       networkId,
       channelId,
       simpleDateTimeFrom,
@@ -793,6 +813,8 @@ export default function SearchPage() {
       mode,
       resultView,
       query,
+      includeTerms,
+      excludeTerms,
       networkId,
       channelId,
       simpleDateTimeFrom,
@@ -831,7 +853,25 @@ export default function SearchPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={mode === 'simple' ? 'Optional. Leave empty to open channel logs.' : 'Search query...'}
-            required={mode !== 'simple'}
+            required={mode !== 'simple' && !String(includeTerms || '').trim() && !String(excludeTerms || '').trim()}
+          />
+        </div>
+        <div className="form-row">
+          <label>Include words (optional)</label>
+          <input
+            type="text"
+            value={includeTerms}
+            onChange={(e) => setIncludeTerms(e.target.value)}
+            placeholder={'e.g. flood 1999 or "very old flood"'}
+          />
+        </div>
+        <div className="form-row">
+          <label>Exclude words (optional)</label>
+          <input
+            type="text"
+            value={excludeTerms}
+            onChange={(e) => setExcludeTerms(e.target.value)}
+            placeholder={'e.g. bot or "received server"'}
           />
         </div>
         <div className="form-row">

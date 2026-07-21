@@ -196,11 +196,24 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
   );
 }
 
-export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom = '', dateTo = '', limit = '', page = '') {
+export async function simpleSearch(
+  apiKey,
+  query,
+  channelId,
+  networkId,
+  dateFrom = '',
+  dateTo = '',
+  limit = '',
+  page = '',
+  includeTerms = '',
+  excludeTerms = ''
+) {
   const normalizedDateFrom = normalizeDateTimeParam(dateFrom);
   const normalizedDateTo = normalizeDateTimeParam(dateTo);
   const params = new URLSearchParams();
   appendIfPresent(params, 'q', query);
+  appendIfPresent(params, 'include_terms', includeTerms);
+  appendIfPresent(params, 'exclude_terms', excludeTerms);
   appendIfPresent(params, 'network_id', networkId);
   appendIfPresent(params, 'channel_id', channelId);
   appendPagination(params, limit, page);
@@ -220,6 +233,8 @@ export async function simpleSearch(apiKey, query, channelId, networkId, dateFrom
 export async function advancedSearch(apiKey, body) {
   const params = new URLSearchParams();
   appendIfPresent(params, 'q', body?.query);
+  appendIfPresent(params, 'include_terms', body?.include_terms);
+  appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
   appendIfPresent(params, 'network_id', body?.network_id);
   appendIfPresent(params, 'channel_id', body?.channel_id);
   appendIfPresent(params, 'nick', body?.nick);
