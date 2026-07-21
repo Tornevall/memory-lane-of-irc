@@ -159,6 +159,7 @@ function buildSearchParamsFromCriteria(criteria) {
   }
 
   pushParam(params, 'q', criteria?.query);
+  pushParam(params, 'query', criteria?.query);
   pushParam(params, 'include_terms', criteria?.includeTerms);
   pushParam(params, 'exclude_terms', criteria?.excludeTerms);
   pushParam(params, 'network', criteria?.networkId);
@@ -187,7 +188,7 @@ function parseCriteriaFromLocation(searchText) {
   return {
     mode,
     resultView: view,
-    query: params.get('q') || '',
+    query: params.get('q') || params.get('query') || '',
     includeTerms: params.get('include_terms') || '',
     excludeTerms: params.get('exclude_terms') || '',
     networkId: params.get('network') || '',
