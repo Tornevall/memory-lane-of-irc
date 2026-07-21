@@ -9,8 +9,45 @@ import {
   getPermalinkUrl,
 } from '../services/api';
 
+const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
+const DEFAULT_PAGE_SIZE = 500;
+const PAGE_SIZE_COOKIE = 'irclogs_page_size';
+
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
+}
+
+function getCookieValue(name) {
+  if (typeof document === 'undefined' || !name) return '';
+  const cookies = String(document.cookie || '').split(';');
+  for (const cookie of cookies) {
+    const trimmed = cookie.trim();
+    if (!trimmed) continue;
+    const eqIndex = trimmed.indexOf('=');
+    const key = eqIndex >= 0 ? trimmed.slice(0, eqIndex) : trimmed;
+    if (key !== name) continue;
+    return eqIndex >= 0 ? decodeURIComponent(trimmed.slice(eqIndex + 1)) : '';
+  }
+  return '';
+}
+
+function setCookieValue(name, value, days = 365) {
+  if (typeof document === 'undefined' || !name) return;
+  const maxAge = Math.max(1, Math.floor(days * 24 * 60 * 60));
+  document.cookie = `${name}=${encodeURIComponent(String(value))}; path=/; max-age=${maxAge}; SameSite=Lax`;
+}
+
+function normalizePageSize(value) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (PAGE_SIZE_OPTIONS.includes(parsed)) {
+    return parsed;
+  }
+  return DEFAULT_PAGE_SIZE;
+}
+
+function getInitialPageSize() {
+  const fromCookie = normalizePageSize(getCookieValue(PAGE_SIZE_COOKIE));
+  return fromCookie || DEFAULT_PAGE_SIZE;
 }
 
 function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
@@ -124,6 +161,8 @@ function buildSearchParamsFromCriteria(criteria) {
   pushParam(params, 'q', criteria?.query);
   pushParam(params, 'network', criteria?.networkId);
   pushParam(params, 'channel', criteria?.channelId);
+  pushParam(params, 'limit', criteria?.limit);
+  pushParam(params, 'page', criteria?.page);
 
   if (normalizedMode === 'simple') {
     pushParam(params, 'from', criteria?.simpleDateTimeFrom);
@@ -132,8 +171,6 @@ function buildSearchParamsFromCriteria(criteria) {
     pushParam(params, 'nick', criteria?.nick);
     pushParam(params, 'date_from', criteria?.dateFrom);
     pushParam(params, 'date_to', criteria?.dateTo);
-    pushParam(params, 'limit', criteria?.limit);
-    pushParam(params, 'page', criteria?.page);
   }
 
   return params.toString();
@@ -143,7 +180,7 @@ function parseCriteriaFromLocation(searchText) {
   const params = new URLSearchParams(String(searchText || ''));
   const mode = params.get('mode') === 'advanced' ? 'advanced' : 'simple';
   const view = params.get('view') === 'refined' ? 'refined' : 'classic';
-  const rawLimit = Number.parseInt(params.get('limit') || '', 10);
+  const rawLimit = normalizePageSize(params.get('limit') || getInitialPageSize());
   const rawPage = Number.parseInt(params.get('page') || '', 10);
   return {
     mode,
@@ -156,7 +193,7 @@ function parseCriteriaFromLocation(searchText) {
     nick: params.get('nick') || '',
     dateFrom: params.get('date_from') || '',
     dateTo: params.get('date_to') || '',
-    limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 1000) : 50,
+    limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? rawLimit : DEFAULT_PAGE_SIZE,
     page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
   };
 }
@@ -354,7 +391,7 @@ export default function SearchPage() {
   const [nick, setNick] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(getInitialPageSize());
   const [page, setPage] = useState(1);
   const [simpleDateTimeFrom, setSimpleDateTimeFrom] = useState('');
   const [simpleDateTimeTo, setSimpleDateTimeTo] = useState('');
@@ -590,6 +627,10 @@ export default function SearchPage() {
   }, []);
 
   useEffect(() => {
+    setCookieValue(PAGE_SIZE_COOKIE, normalizePageSize(limit));
+  }, [limit]);
+
+  useEffect(() => {
     const parsedCriteria = parseCriteriaFromLocation(window.location.search || '');
     setMode(parsedCriteria.mode);
     setResultView(parsedCriteria.resultView);
@@ -601,7 +642,7 @@ export default function SearchPage() {
     setNick(parsedCriteria.nick);
     setDateFrom(parsedCriteria.dateFrom);
     setDateTo(parsedCriteria.dateTo);
-    setLimit(parsedCriteria.limit);
+    setLimit(normalizePageSize(parsedCriteria.limit));
     setPage(parsedCriteria.page);
 
     const initialQueryString = buildSearchParamsFromCriteria(parsedCriteria);
@@ -648,7 +689,7 @@ export default function SearchPage() {
       nick: String(criteria?.nick ?? ''),
       dateFrom: String(criteria?.dateFrom ?? ''),
       dateTo: String(criteria?.dateTo ?? ''),
-      limit: Number(criteria?.limit ?? 50),
+      limit: Number(criteria?.limit ?? DEFAULT_PAGE_SIZE),
       page: Number(criteria?.page ?? 1),
     };
     const shareQueryString = buildSearchParamsFromCriteria(normalizedCriteria);
@@ -679,9 +720,22 @@ export default function SearchPage() {
           && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
           ? normalizedCriteria.simpleDateTimeFrom
           : normalizedCriteria.simpleDateTimeTo;
-        data = await simpleSearch(apiKey, trimmedQuery, normalizedCriteria.channelId, normalizedCriteria.networkId, effectiveFrom, effectiveTo);
+        data = await simpleSearch(
+          apiKey,
+          trimmedQuery,
+          normalizedCriteria.channelId,
+          normalizedCriteria.networkId,
+          effectiveFrom,
+          effectiveTo,
+          normalizePageSize(normalizedCriteria.limit),
+          Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1
+        );
       } else {
-        const body = { query: normalizedCriteria.query, limit: Number(normalizedCriteria.limit), page: Number(normalizedCriteria.page) };
+        const body = {
+          query: normalizedCriteria.query,
+          limit: normalizePageSize(normalizedCriteria.limit),
+          page: Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
+        };
         if (normalizedCriteria.networkId) body.network_id = Number(normalizedCriteria.networkId);
         if (normalizedCriteria.channelId) body.channel_id = Number(normalizedCriteria.channelId);
         if (normalizedCriteria.nick) body.nick = normalizedCriteria.nick;
@@ -702,6 +756,8 @@ export default function SearchPage() {
 
   async function handleSearch(e) {
     e.preventDefault();
+    const firstPage = 1;
+    setPage(firstPage);
     await executeSearch({
       mode,
       resultView,
@@ -714,7 +770,26 @@ export default function SearchPage() {
       dateFrom,
       dateTo,
       limit,
-      page,
+      page: firstPage,
+    });
+  }
+
+  async function handlePageNavigation(nextPage) {
+    const targetPage = Math.max(1, Number.parseInt(String(nextPage || ''), 10) || 1);
+    setPage(targetPage);
+    await executeSearch({
+      mode,
+      resultView,
+      query,
+      networkId,
+      channelId,
+      simpleDateTimeFrom,
+      simpleDateTimeTo,
+      nick,
+      dateFrom,
+      dateTo,
+      limit,
+      page: targetPage,
     });
   }
 
@@ -879,27 +954,23 @@ export default function SearchPage() {
                 placeholder="To: yyyy-mm-dd"
               />
             </div>
-            <div className="form-row">
-              <label>Limit (max 1000)</label>
-              <input
-                type="number"
-                value={limit}
-                min={1}
-                max={1000}
-                onChange={(e) => setLimit(e.target.value)}
-              />
-            </div>
-            <div className="form-row">
-              <label>Page</label>
-              <input
-                type="number"
-                value={page}
-                min={1}
-                onChange={(e) => setPage(e.target.value)}
-              />
-            </div>
           </>
         )}
+        <div className="form-row">
+          <label>Rows per page</label>
+          <select
+            value={String(limit)}
+            onChange={(e) => {
+              const nextLimit = normalizePageSize(e.target.value);
+              setLimit(nextLimit);
+              setPage(1);
+            }}
+          >
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={String(option)}>{option}</option>
+            ))}
+          </select>
+        </div>
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? 'Loading…' : (mode === 'simple' && !String(query || '').trim() ? 'Open channel' : 'Search')}
         </button>
@@ -909,6 +980,32 @@ export default function SearchPage() {
 
       {results && (
         <div className="results">
+          {(() => {
+            const rows = Array.isArray(results.results) ? results.results : [];
+            const total = Number.parseInt(String(results.total ?? rows.length ?? 0), 10) || 0;
+            const currentPage = Math.max(1, Number.parseInt(String(results.page ?? page ?? 1), 10) || 1);
+            const currentLimit = normalizePageSize(results.limit ?? limit);
+            const maxPageByTotal = total > 0 ? Math.max(1, Math.ceil(total / Math.max(1, currentLimit))) : currentPage;
+            const hasPrev = currentPage > 1;
+            const hasNext = total > 0
+              ? currentPage < maxPageByTotal
+              : rows.length >= currentLimit;
+            return (
+              <>
+                <div className="results-pagination">
+                  <button type="button" className="btn-secondary" disabled={loading || !hasPrev} onClick={() => handlePageNavigation(currentPage - 1)}>
+                    Previous
+                  </button>
+                  <span className="results-page-indicator">
+                    Page {currentPage}{total > 0 ? ` / ${maxPageByTotal}` : ''}
+                  </span>
+                  <button type="button" className="btn-secondary" disabled={loading || !hasNext} onClick={() => handlePageNavigation(currentPage + 1)}>
+                    Next
+                  </button>
+                </div>
+              </>
+            );
+          })()}
           <div className="results-header-row">
             <div className="results-header">
               Found {results.total ?? results.results?.length ?? 0} results

@@ -311,6 +311,20 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   flex-wrap: wrap;
 }
 
+.results-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.results-page-indicator {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  min-width: 7rem;
+  text-align: center;
+}
+
 .view-toggle {
   display: inline-flex;
   border: 1px solid #334155;
