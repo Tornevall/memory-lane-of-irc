@@ -234,6 +234,12 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   pointer-events: none;
 }
 
+.date-range-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.1rem;
+}
+
 .checkbox-row { flex-direction: row; align-items: center; }
 .checkbox-row label { display: flex; align-items: center; gap: 0.5rem; color: #e2e8f0; }
 

@@ -827,6 +827,16 @@ export default function SearchPage() {
     });
   }
 
+  function handleSimpleDateReset() {
+    if (simpleMinDateTime || simpleMaxDateTime) {
+      setSimpleDateTimeFrom(simpleMinDateTime || '');
+      setSimpleDateTimeTo(simpleMaxDateTime || '');
+      return;
+    }
+    setSimpleDateTimeFrom('');
+    setSimpleDateTimeTo('');
+  }
+
   return (
     <div className="page">
       <h1>Search IRC Logs</h1>
@@ -971,6 +981,16 @@ export default function SearchPage() {
               max={simpleMaxDateTime || undefined}
               disabled={!channelId || loadingDateRange}
             />
+            <div className="date-range-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleSimpleDateReset}
+                disabled={!channelId || loadingDateRange}
+              >
+                Reset date range
+              </button>
+            </div>
             {channelId && loadingDateRange && <small>Loading date range...</small>}
             {channelId && !loadingDateRange && (simpleMinDateTime || simpleMaxDateTime) && (
               <small>
