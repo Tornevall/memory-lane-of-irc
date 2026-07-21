@@ -389,6 +389,19 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
 .channel { color: #34d399; }
 .network { color: #f59e0b; }
 .date { color: #64748b; margin-left: auto; }
+.row-anchor-id {
+  font-size: 0.68rem;
+  color: #64748b;
+  text-decoration: none;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+.row-anchor-id:hover { color: #93c5fd; text-decoration: underline; }
+.row-anchor-id-classic { margin-right: 0.4rem; }
+.row-anchor-time {
+  color: inherit;
+  text-decoration: none;
+}
+.row-anchor-time:hover { color: #93c5fd; text-decoration: underline; }
 
 .result-message {
   font-size: 0.95rem;
@@ -429,6 +442,7 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
 .classic-host { color: #64748b; }
 .classic-channel { color: #34d399; }
 .classic-message { color: #e2e8f0; }
+.permalink-inline { margin-left: 0.4rem; }
 
 .permalink {
   font-size: 0.78rem;

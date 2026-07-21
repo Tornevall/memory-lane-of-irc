@@ -132,26 +132,26 @@ function RefinedResultRow({ result }) {
   const rawText = String(result.raw_line ?? result.message ?? '');
   const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
+  const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
+  const occurredAtText = result.occurred_at ? new Date(result.occurred_at).toLocaleString() : '--';
 
   return (
     <div id={rowId} className={`result-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="result-meta">
         <span className={`event-type ${eventTypeClass}`}>{eventType}</span>
+        {rowShortId && <a href={rowHref} className="row-anchor-id" title="Direct link to this row">#{rowShortId}</a>}
         <span className="nick">{result.nick}</span>
         {result.user_host && <span className="hostmask">{result.user_host}</span>}
         <span className="channel">{result.channel}</span>
         <span className="network">{result.network}</span>
-        <span className="date">{new Date(result.occurred_at).toLocaleString()}</span>
-      </div>
-      <div className="result-message result-raw">{renderMircText(rawText)}</div>
-      <div className="result-links">
-        <a href={rowHref} className="permalink"># Row link</a>
+        <span className="date"><a href={rowHref} className="row-anchor-time" title="Direct link to this row">{occurredAtText}</a></span>
         {result.permalink && (
           <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink">
-            Permalink ↗
+            ↗
           </a>
         )}
       </div>
+      <div className="result-message result-raw">{renderMircText(rawText)}</div>
     </div>
   );
 }
@@ -160,6 +160,7 @@ function ClassicResultRow({ result }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result);
   const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
+  const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
   const nick = String(result.nick || '').trim();
   const channel = String(result.channel || '').trim();
   const userHost = String(result.user_host || '').trim();
@@ -171,17 +172,15 @@ function ClassicResultRow({ result }) {
   return (
     <div id={rowId} className={`classic-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="classic-main">
+        {rowShortId && <a href={rowHref} className="row-anchor-id row-anchor-id-classic" title="Direct link to this row">#{rowShortId}</a>}
         <span className="classic-prefix">{prefix}</span>
         {nickPart && <span className="classic-nick"> {nickPart}</span>}
         {hostPart && <span className="classic-host">{hostPart}</span>}
         {wherePart && <span className="classic-channel">{wherePart}</span>}
         {lineBody && <span className="classic-message"> {renderMircText(lineBody)}</span>}
-      </div>
-      <div className="result-links">
-        <a href={rowHref} className="permalink"># Row link</a>
         {result.permalink && (
-          <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink">
-            Permalink ↗
+          <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink permalink-inline">
+            ↗
           </a>
         )}
       </div>
