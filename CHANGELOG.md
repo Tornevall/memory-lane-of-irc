@@ -14,6 +14,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added mandatory release-governance rules in `AGENTS.md`: push every change to GitHub and keep changelog entries comprehensive.
 
 ### Changed
+- Default search result rendering now prefers raw IRC log lines (`raw_line`) to keep the classic log look while preserving the refined card layout.
+- Added mIRC formatting support in result rows (colors + style control codes) instead of stripping control data from log text.
+- Added per-row deep-link anchors (`#row-*`) with direct row-link actions and hash-based auto-scroll/highlight on page load.
+- Added explicit event-type badges per row (`PRIVMSG`, `JOIN`, `QUIT`, etc.) so event semantics are visible at a glance.
 - Fixed React IRC log search to keep the configured `VITE_API_URL` instead of silently swapping to the browser origin, which was sending requests to the wrong host.
 - Fixed the React date-range helper so channel date bounds can populate the simple search inputs without a runtime scope error.
 - Updated Vite build configuration for `/irclogs-react/` subpath deployment.

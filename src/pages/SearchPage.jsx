@@ -36,25 +36,139 @@ function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
 }
 
 function ResultRow({ result }) {
+  const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
+  const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const rowHref = `${window.location.pathname}${window.location.search}#${rowId}`;
+  const hasHashMatch = String(window.location.hash || '') === `#${rowId}`;
+  const rawText = String(result.raw_line ?? result.message ?? '');
+  const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
+  const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
+
+  const mircPalette = [
+    '#ffffff', '#000000', '#1f4fff', '#3fb950', '#ff4d4f', '#7c8cf8', '#8b5cf6', '#f59e0b',
+    '#facc15', '#22c55e', '#2dd4bf', '#38bdf8', '#60a5fa', '#ec4899', '#94a3b8', '#d1d5db',
+  ];
+
+  function styleFromState(state) {
+    const style = {
+      fontWeight: state.bold ? 700 : 400,
+      fontStyle: state.italic ? 'italic' : 'normal',
+      textDecoration: state.underline ? 'underline' : 'none',
+    };
+    if (Number.isInteger(state.fg)) {
+      style.color = mircPalette[state.fg % mircPalette.length];
+    }
+    if (Number.isInteger(state.bg)) {
+      style.backgroundColor = mircPalette[state.bg % mircPalette.length];
+    }
+    return style;
+  }
+
+  function renderMircText(input) {
+    const text = String(input || '');
+    const out = [];
+    let buffer = '';
+    let key = 0;
+    let state = { bold: false, italic: false, underline: false, fg: null, bg: null };
+
+    const flush = () => {
+      if (!buffer) return;
+      out.push(
+        <span key={`m-${key++}`} style={styleFromState(state)}>
+          {buffer}
+        </span>
+      );
+      buffer = '';
+    };
+
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      const code = ch.charCodeAt(0);
+
+      if (code === 2) { // bold
+        flush();
+        state = { ...state, bold: !state.bold };
+        continue;
+      }
+      if (code === 29) { // italic
+        flush();
+        state = { ...state, italic: !state.italic };
+        continue;
+      }
+      if (code === 31) { // underline
+        flush();
+        state = { ...state, underline: !state.underline };
+        continue;
+      }
+      if (code === 15) { // reset
+        flush();
+        state = { bold: false, italic: false, underline: false, fg: null, bg: null };
+        continue;
+      }
+      if (code === 22) { // reverse
+        flush();
+        state = { ...state, fg: state.bg, bg: state.fg };
+        continue;
+      }
+      if (code === 3) { // color
+        flush();
+        let j = i + 1;
+        let fgDigits = '';
+        while (j < text.length && fgDigits.length < 2 && /[0-9]/.test(text[j])) {
+          fgDigits += text[j];
+          j += 1;
+        }
+        let bgDigits = '';
+        if (j < text.length && text[j] === ',') {
+          j += 1;
+          while (j < text.length && bgDigits.length < 2 && /[0-9]/.test(text[j])) {
+            bgDigits += text[j];
+            j += 1;
+          }
+        }
+        if (fgDigits.length > 0) {
+          state = {
+            ...state,
+            fg: Number.parseInt(fgDigits, 10),
+            bg: bgDigits.length > 0 ? Number.parseInt(bgDigits, 10) : null,
+          };
+        } else {
+          state = { ...state, fg: null, bg: null };
+        }
+        i = j - 1;
+        continue;
+      }
+
+      buffer += ch;
+    }
+
+    flush();
+    return out;
+  }
+
   return (
-    <div className="result-row">
+    <div id={rowId} className={`result-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="result-meta">
+        <span className={`event-type ${eventTypeClass}`}>{eventType}</span>
         <span className="nick">{result.nick}</span>
         <span className="channel">{result.channel}</span>
         <span className="network">{result.network}</span>
         <span className="date">{new Date(result.occurred_at).toLocaleString()}</span>
       </div>
-      <div className="result-message">{result.message}</div>
-      {result.permalink && (
-        <a
-          href={getPermalinkUrl(result.permalink)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="permalink"
-        >
-          Permalink ↗
-        </a>
-      )}
+      <div className="result-message result-raw">{renderMircText(rawText)}</div>
+      <div className="result-links">
+        <a href={rowHref} className="permalink"># Row link</a>
+        {result.permalink && (
+          <a
+            href={getPermalinkUrl(result.permalink)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="permalink"
+          >
+            Permalink ↗
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -230,7 +344,8 @@ export default function SearchPage() {
     const selectedChannelLabel = getChannelLabelById(channelId);
     return rows.map((row) => ({
       ...row,
-      message: row.message ?? row.message_text ?? row.event_text ?? '',
+      message: row.raw_line ?? row.message ?? row.message_text ?? row.event_text ?? '',
+      event_type: row.event_type ?? row.type ?? row.event ?? 'UNKNOWN',
       occurred_at: row.occurred_at ?? row.date ?? row.created_at ?? null,
       network: row.network ?? row.network_name ?? selectedNetworkLabel ?? '',
       channel: row.channel ?? row.channel_name ?? selectedChannelLabel ?? '',
@@ -344,6 +459,15 @@ export default function SearchPage() {
   useEffect(() => {
     loadNetworks();
   }, []);
+
+  useEffect(() => {
+    const hash = String(window.location.hash || '');
+    if (!hash || !results?.results?.length) return;
+    const target = document.getElementById(hash.slice(1));
+    if (target) {
+      target.scrollIntoView({ block: 'center' });
+    }
+  }, [results]);
 
   async function handleSearch(e) {
     e.preventDefault();
