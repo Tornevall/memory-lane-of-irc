@@ -14,6 +14,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added mandatory release-governance rules in `AGENTS.md`: push every change to GitHub and keep changelog entries comprehensive.
 
 ### Changed
+- Fixed React IRC log search to keep the configured `VITE_API_URL` instead of silently swapping to the browser origin, which was sending requests to the wrong host.
+- Fixed the React date-range helper so channel date bounds can populate the simple search inputs without a runtime scope error.
 - Updated Vite build configuration for `/irclogs-react/` subpath deployment.
 - Updated production build output behavior to generate deployable files directly in the app directory.
 - Updated auth UX to allow readonly browsing without API key and gate write actions behind saved key.

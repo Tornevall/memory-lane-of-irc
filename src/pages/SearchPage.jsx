@@ -13,6 +13,28 @@ function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
 }
 
+function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return `${raw}T${endOfDayForDateOnly ? '23:59' : '00:00'}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw)) {
+    return raw.slice(0, 16).replace(' ', 'T');
+  }
+  const candidate = raw.replace(' ', 'T');
+  const dt = new Date(candidate);
+  if (Number.isNaN(dt.getTime())) {
+    return '';
+  }
+  const year = dt.getFullYear();
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  const hours = String(dt.getHours()).padStart(2, '0');
+  const minutes = String(dt.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function ResultRow({ result }) {
   return (
     <div className="result-row">
@@ -58,28 +80,6 @@ function normalizeDateInput(value, minDate = '', maxDate = '') {
       day = Number(m[1]);
     } else {
       return raw;
-    }
-
-    function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
-      const raw = String(value || '').trim();
-      if (!raw) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        return `${raw}T${endOfDayForDateOnly ? '23:59' : '00:00'}`;
-      }
-      if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw)) {
-        return raw.slice(0, 16).replace(' ', 'T');
-      }
-      const candidate = raw.replace(' ', 'T');
-      const dt = new Date(candidate);
-      if (Number.isNaN(dt.getTime())) {
-        return '';
-      }
-      const year = dt.getFullYear();
-      const month = String(dt.getMonth() + 1).padStart(2, '0');
-      const day = String(dt.getDate()).padStart(2, '0');
-      const hours = String(dt.getHours()).padStart(2, '0');
-      const minutes = String(dt.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
   }
 

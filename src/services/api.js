@@ -29,18 +29,6 @@ function resolveApiBaseUrl() {
   const browserOrigin = typeof window !== 'undefined' ? normalizeBaseUrl(window.location?.origin) : '';
   const explicit = normalizeBaseUrl(import.meta.env.VITE_API_URL);
   if (explicit) {
-    // Guard against stale env where .net build accidentally points to .com (or vice versa),
-    // which causes CORS/preflight failures for API calls.
-    if (browserOrigin && isTrustedTornevallHost(browserHost)) {
-      try {
-        const explicitHost = String(new URL(explicit).hostname || '').toLowerCase();
-        if (isTrustedTornevallHost(explicitHost) && explicitHost !== browserHost) {
-          return browserOrigin;
-        }
-      } catch {
-        // Keep explicit URL if it is not a valid absolute URL.
-      }
-    }
     return explicit;
   }
 
