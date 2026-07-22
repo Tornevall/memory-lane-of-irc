@@ -1024,6 +1024,22 @@ export default function SearchPage() {
     });
   }
 
+  function canFilterNetworksByActivity(items) {
+    return (Array.isArray(items) ? items : []).some((entity) => {
+      const candidates = [
+        entity?.activity_count,
+        entity?.event_count,
+        entity?.row_count,
+        entity?.total_rows,
+        entity?.message_count,
+        entity?.log_count,
+        entity?.entries_count,
+      ];
+
+      return candidates.some((value) => Number.isFinite(Number(value)));
+    });
+  }
+
   function getNetworkLabelById(id) {
     const wanted = String(id || '');
     const network = networks.find((n) => String(getEntityId(n)) === wanted);
@@ -1036,7 +1052,9 @@ export default function SearchPage() {
     return channel ? getEntityName(channel, 'Channel') : '';
   }
 
-  const networkOptions = (Array.isArray(networks) ? networks : []).filter((network) => hasLoggedActivity(network));
+  const networkOptions = canFilterNetworksByActivity(networks)
+    ? (Array.isArray(networks) ? networks : []).filter((network) => hasLoggedActivity(network))
+    : (Array.isArray(networks) ? networks : []);
 
   const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
     const filter = String(channelFilter || '').trim().toLowerCase();
@@ -1142,7 +1160,7 @@ export default function SearchPage() {
     try {
       const payload = await getNetworks(apiKey);
       const loadedNetworks = extractArray(payload, 'networks');
-      setNetworks(loadedNetworks.filter((network) => hasLoggedActivity(network)));
+      setNetworks(loadedNetworks);
       setNetworksReady(true);
     } catch (err) {
       setError(err.message || 'Failed to load networks.');
