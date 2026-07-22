@@ -940,6 +940,9 @@ export default function SearchPage() {
   const channelsRequestSeqRef = useRef(0);
   const channelsCacheRef = useRef(new Map());
   const nickSuggestionSeqRef = useRef(0);
+  const searchRequestSeqRef = useRef(0);
+  const lastLogCriteriaRef = useRef(null);
+  const lastLogResultsRef = useRef(null);
   const readSource = getReadSource();
 
   function extractArray(payload, preferredKey) {
@@ -1261,6 +1264,8 @@ export default function SearchPage() {
   async function executeSearch(criteria, options = {}) {
     const apiKey = getApiKey();
     const { updateUrl = true } = options;
+    const requestSeq = searchRequestSeqRef.current + 1;
+    searchRequestSeqRef.current = requestSeq;
     const normalizedCriteria = {
       mode: ['simple', 'advanced', 'statistics'].includes(String(criteria?.mode || ''))
         ? String(criteria.mode)
@@ -1325,11 +1330,15 @@ export default function SearchPage() {
           normalizedCriteria.eventTypes,
           normalizedCriteria.focusId
         );
-        setResults({
+        const nextResults = {
           ...data,
           view_mode: normalizedCriteria.mode,
           results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
-        });
+        };
+        if (requestSeq !== searchRequestSeqRef.current) return;
+        setResults(nextResults);
+        lastLogCriteriaRef.current = { ...normalizedCriteria };
+        lastLogResultsRef.current = nextResults;
       } else if (normalizedCriteria.mode === 'advanced') {
         const body = {
           query: normalizedCriteria.query,
@@ -1346,11 +1355,15 @@ export default function SearchPage() {
         if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
         if (normalizedCriteria.eventTypes.length > 0) body.event_types = normalizedCriteria.eventTypes.join(',');
         data = await advancedSearch(apiKey, body);
-        setResults({
+        const nextResults = {
           ...data,
           view_mode: normalizedCriteria.mode,
           results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
-        });
+        };
+        if (requestSeq !== searchRequestSeqRef.current) return;
+        setResults(nextResults);
+        lastLogCriteriaRef.current = { ...normalizedCriteria };
+        lastLogResultsRef.current = nextResults;
       } else {
         const effectiveFrom = normalizedCriteria.simpleDateTimeFrom
           && normalizedCriteria.simpleDateTimeTo
@@ -1374,14 +1387,18 @@ export default function SearchPage() {
           date_from: effectiveFrom ? effectiveFrom.slice(0, 10) : '',
           date_to: effectiveTo ? effectiveTo.slice(0, 10) : '',
         });
-        setResults({
+        const nextResults = {
           ...data,
           view_mode: normalizedCriteria.mode,
-        });
+        };
+        if (requestSeq !== searchRequestSeqRef.current) return;
+        setResults(nextResults);
       }
     } catch (err) {
+      if (requestSeq !== searchRequestSeqRef.current) return;
       setError(err.message);
     } finally {
+      if (requestSeq !== searchRequestSeqRef.current) return;
       setLoading(false);
     }
   }
@@ -1604,6 +1621,7 @@ export default function SearchPage() {
     const normalizedMode = ['simple', 'advanced', 'statistics'].includes(String(nextMode || ''))
       ? String(nextMode)
       : 'simple';
+    const previousMode = mode;
     setMode(normalizedMode);
     const firstPage = 1;
     setPage(firstPage);
@@ -1613,19 +1631,53 @@ export default function SearchPage() {
     }
 
     // Hide statistics output immediately when switching back to log modes.
-    setResults(null);
     setError('');
+    const canRestorePreviousLogView = previousMode === 'statistics'
+      && lastLogResultsRef.current
+      && lastLogCriteriaRef.current
+      && lastLogCriteriaRef.current.mode === normalizedMode;
+    if (canRestorePreviousLogView) {
+      setResults(lastLogResultsRef.current);
+    } else {
+      setResults(null);
+    }
 
-    const canAutoLoadSimple = String(query || '').trim() !== ''
-      || String(includeTerms || '').trim() !== ''
-      || String(excludeTerms || '').trim() !== ''
-      || String(channelId || '').trim() !== '';
+    const fallbackCriteria = {
+      mode: normalizedMode,
+      resultView,
+      query,
+      includeTerms,
+      excludeTerms,
+      networkId,
+      channelId,
+      simpleDateTimeFrom,
+      simpleDateTimeTo,
+      nick,
+      dateFrom,
+      dateTo,
+      eventTypes,
+      limit,
+      page: firstPage,
+    };
+    const restoreCriteria = canRestorePreviousLogView
+      ? { ...lastLogCriteriaRef.current, mode: normalizedMode, page: firstPage }
+      : fallbackCriteria;
+
+    const canAutoLoadSimple = String(restoreCriteria.query || '').trim() !== ''
+      || String(restoreCriteria.includeTerms || '').trim() !== ''
+      || String(restoreCriteria.excludeTerms || '').trim() !== ''
+      || String(restoreCriteria.channelId || '').trim() !== '';
     const canAutoLoad = normalizedMode === 'simple' ? canAutoLoadSimple : true;
     if (!canAutoLoad) {
+      const queryString = buildSearchParamsFromCriteria(restoreCriteria);
+      setLastSearchQueryString(queryString);
+      const searchPart = queryString ? `?${queryString}` : '';
+      const currentHash = String(window.location.hash || '');
+      window.history.replaceState(null, '', `${window.location.pathname}${searchPart}${currentHash}`);
       return;
     }
 
-    await executeCurrentSearch({ mode: normalizedMode, page: firstPage });
+    await executeSearch(restoreCriteria);
   }
 
   return (
