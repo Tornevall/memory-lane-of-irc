@@ -1612,6 +1612,20 @@ export default function SearchPage() {
     await applyEventTypeSelection(nextTypes);
   }
 
+  function hasInteractiveSearchContext(overrides = {}) {
+    const nextMode = String(overrides.mode ?? mode);
+    const nextQuery = String(overrides.query ?? query);
+    const nextIncludeTerms = String(overrides.includeTerms ?? includeTerms);
+    const nextExcludeTerms = String(overrides.excludeTerms ?? excludeTerms);
+    const nextChannelId = String(overrides.channelId ?? channelId);
+    return results !== null
+      || nextQuery.trim() !== ''
+      || nextIncludeTerms.trim() !== ''
+      || nextExcludeTerms.trim() !== ''
+      || nextChannelId.trim() !== ''
+      || nextMode === 'statistics';
+  }
+
   function toggleTopNickSelection(nickValue) {
     const target = String(nickValue || '').trim();
     if (!target) return;
@@ -1751,7 +1765,18 @@ export default function SearchPage() {
             <label>Query field</label>
             <select
               value={queryScope}
-              onChange={(e) => setQueryScope(normalizeAdvancedQueryScope(e.target.value))}
+              onChange={async (e) => {
+                const nextScope = normalizeAdvancedQueryScope(e.target.value);
+                setQueryScope(nextScope);
+                if (mode === 'advanced' && hasInteractiveSearchContext({ queryScope: nextScope })) {
+                  const firstPage = 1;
+                  setPage(firstPage);
+                  await executeCurrentSearch({
+                    queryScope: nextScope,
+                    page: firstPage,
+                  });
+                }
+              }}
             >
               {ADVANCED_QUERY_SCOPE_OPTIONS.map((scope) => (
                 <option key={scope.value} value={scope.value}>{scope.label}</option>
@@ -1815,7 +1840,7 @@ export default function SearchPage() {
           <label>Network (optional)</label>
           <select
             value={networkId}
-            onChange={(e) => {
+            onChange={async (e) => {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
@@ -1826,7 +1851,22 @@ export default function SearchPage() {
               setSimpleDateTimeTo('');
               setSimpleMinDateTime('');
               setSimpleMaxDateTime('');
-              loadChannels(selected);
+              await loadChannels(selected);
+              const canAutoLoadSimple = String(query || '').trim() !== ''
+                || String(includeTerms || '').trim() !== ''
+                || String(excludeTerms || '').trim() !== '';
+              const canAutoLoad = mode === 'simple' ? canAutoLoadSimple : true;
+              if (canAutoLoad && hasInteractiveSearchContext({ networkId: selected, channelId: '' })) {
+                const firstPage = 1;
+                setPage(firstPage);
+                await executeCurrentSearch({
+                  networkId: selected,
+                  channelId: '',
+                  simpleDateTimeFrom: '',
+                  simpleDateTimeTo: '',
+                  page: firstPage,
+                });
+              }
             }}
             disabled={loadingNetworks || !networksReady}
           >
@@ -1961,9 +2001,17 @@ export default function SearchPage() {
                       key={`nick-suggestion-${item.nick}`}
                       type="button"
                       className="nick-suggestion-item"
-                      onClick={() => {
+                      onClick={async () => {
                         setNick(item.nick);
                         setNickSuggestions([]);
+                        if (mode === 'advanced') {
+                          const firstPage = 1;
+                          setPage(firstPage);
+                          await executeCurrentSearch({
+                            nick: item.nick,
+                            page: firstPage,
+                          });
+                        }
                       }}
                     >
                       <span className="nick-suggestion-name">{item.nick}</span>
@@ -1995,10 +2043,17 @@ export default function SearchPage() {
           <label>Rows per page</label>
           <select
             value={String(limit)}
-            onChange={(e) => {
+            onChange={async (e) => {
               const nextLimit = normalizePageSize(e.target.value);
               setLimit(nextLimit);
-              setPage(1);
+              const firstPage = 1;
+              setPage(firstPage);
+              if (hasInteractiveSearchContext({ limit: nextLimit, page: firstPage })) {
+                await executeCurrentSearch({
+                  limit: nextLimit,
+                  page: firstPage,
+                });
+              }
             }}
           >
             {PAGE_SIZE_OPTIONS.map((option) => (
