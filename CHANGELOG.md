@@ -15,6 +15,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a third search mode tab, **Statistics**, powered by backend API aggregation (`aggregate=stats`) for totals, time range, event-type counts, and top nick summaries.
 
 ### Changed
+- Search network selector now depends on backend activity counts and no longer needs frontend-side guessing to hide empty networks.
 - Network selector now hides inactive networks only when the backend actually returns activity counters; plain `id`/`name` payloads keep all networks visible instead of rendering an empty list.
 - Default search result rendering now prefers raw IRC log lines (`raw_line`) to keep the classic log look while preserving the refined card layout.
 - Added mIRC formatting support in result rows (colors + style control codes) instead of stripping control data from log text.
