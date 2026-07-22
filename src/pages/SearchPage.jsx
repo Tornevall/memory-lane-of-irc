@@ -462,7 +462,6 @@ export default function SearchPage() {
   const [excludeTerms, setExcludeTerms] = useState('');
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
-  const [channelFilter, setChannelFilter] = useState('');
   const [networks, setNetworks] = useState([]);
   const [channels, setChannels] = useState([]);
   const [networksReady, setNetworksReady] = useState(false);
@@ -498,7 +497,6 @@ export default function SearchPage() {
   const channelsCacheRef = useRef(new Map());
   const nickSuggestionSeqRef = useRef(0);
   const readSource = getReadSource();
-  const normalizedChannelFilter = String(channelFilter || '').trim().toLowerCase();
 
   function extractArray(payload, preferredKey) {
     if (Array.isArray(payload)) {
@@ -550,26 +548,7 @@ export default function SearchPage() {
     return channel ? getEntityName(channel, 'Channel') : '';
   }
 
-  function getFilteredChannels() {
-    const allChannels = Array.isArray(channels) ? channels : [];
-    if (!normalizedChannelFilter) {
-      return allChannels;
-    }
-
-    return allChannels.filter((channel) => {
-      const id = String(getEntityId(channel) || '').toLowerCase();
-      const name = String(getEntityName(channel, 'Channel') || '').toLowerCase();
-      return id.includes(normalizedChannelFilter) || name.includes(normalizedChannelFilter);
-    });
-  }
-
-  const filteredChannels = getFilteredChannels();
-  const selectedChannelInFilter = !channelId
-    || filteredChannels.some((channel) => String(getEntityId(channel)) === String(channelId));
-  const selectedChannelObject = !selectedChannelInFilter
-    ? channels.find((channel) => String(getEntityId(channel)) === String(channelId))
-    : null;
-  const channelOptions = selectedChannelObject ? [selectedChannelObject, ...filteredChannels] : filteredChannels;
+  const channelOptions = Array.isArray(channels) ? channels : [];
 
   function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
@@ -618,6 +597,7 @@ export default function SearchPage() {
     // Always reset defaults when a channel is selected.
     setSimpleDateTimeFrom(minValue);
     setSimpleDateTimeTo(maxValue);
+    return { from: minValue, to: maxValue };
   }
 
   async function loadDateRange(selectedNetworkId, selectedChannelId) {
@@ -626,18 +606,19 @@ export default function SearchPage() {
       setSimpleDateTimeTo('');
       setSimpleMinDateTime('');
       setSimpleMaxDateTime('');
-      return;
+      return { from: '', to: '' };
     }
     const apiKey = getApiKey();
     setLoadingDateRange(true);
     try {
       const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
-      applyDateRange(range.firstDate || '', range.lastDate || '');
+      return applyDateRange(range.firstDate || '', range.lastDate || '');
     } catch {
       setSimpleDateTimeFrom('');
       setSimpleDateTimeTo('');
       setSimpleMinDateTime('');
       setSimpleMaxDateTime('');
+      return { from: '', to: '' };
     } finally {
       setLoadingDateRange(false);
     }
@@ -1068,20 +1049,9 @@ export default function SearchPage() {
     });
   }
 
-  async function handleModeChange(nextMode) {
-    const normalizedMode = ['simple', 'advanced', 'statistics'].includes(String(nextMode || ''))
-      ? String(nextMode)
-      : 'simple';
-    setMode(normalizedMode);
-
-    if (normalizedMode !== 'statistics') {
-      return;
-    }
-
-    const firstPage = 1;
-    setPage(firstPage);
-    await executeSearch({
-      mode: 'statistics',
+  async function executeCurrentSearch(overrides = {}) {
+    const nextCriteria = {
+      mode,
       resultView,
       query,
       includeTerms,
@@ -1095,8 +1065,25 @@ export default function SearchPage() {
       dateTo,
       eventTypes,
       limit,
-      page: firstPage,
-    });
+      page,
+      ...overrides,
+    };
+    await executeSearch(nextCriteria);
+  }
+
+  async function handleModeChange(nextMode) {
+    const normalizedMode = ['simple', 'advanced', 'statistics'].includes(String(nextMode || ''))
+      ? String(nextMode)
+      : 'simple';
+    setMode(normalizedMode);
+
+    if (normalizedMode !== 'statistics') {
+      return;
+    }
+
+    const firstPage = 1;
+    setPage(firstPage);
+    await executeCurrentSearch({ mode: 'statistics', page: firstPage });
   }
 
   return (
@@ -1160,7 +1147,6 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
-              setChannelFilter('');
               setChannels([]);
               setChannelsReady(false);
               setSimpleDateTimeFrom('');
@@ -1184,27 +1170,35 @@ export default function SearchPage() {
         </div>
         <div className="form-row">
           <label>Channel (optional)</label>
-          <input
-            type="text"
-            value={channelFilter}
-            onChange={(e) => setChannelFilter(e.target.value)}
-            placeholder={networkId ? 'Filter channels (name or id)...' : 'Select network first'}
-            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
-          />
           <select
             value={channelId}
-            onChange={(e) => {
+            onChange={async (e) => {
               const selected = e.target.value;
               setChannelId(selected);
-              setSimpleDateTimeFrom('');
-              setSimpleDateTimeTo('');
+              let nextRange = { from: '', to: '' };
               const selectedChannel = channels.find((channel) => String(getEntityId(channel)) === String(selected));
               const first = selectedChannel?.first_date || selectedChannel?.firstDate || '';
               const last = selectedChannel?.last_date || selectedChannel?.lastDate || '';
               if (first || last) {
-                applyDateRange(first, last);
+                nextRange = applyDateRange(first, last);
               } else {
-                loadDateRange(networkId, selected);
+                nextRange = await loadDateRange(networkId, selected);
+              }
+
+              const hasActiveSearchContext = results !== null
+                || String(query || '').trim() !== ''
+                || String(includeTerms || '').trim() !== ''
+                || String(excludeTerms || '').trim() !== ''
+                || mode === 'statistics';
+              if (hasActiveSearchContext) {
+                const firstPage = 1;
+                setPage(firstPage);
+                await executeCurrentSearch({
+                  channelId: selected,
+                  simpleDateTimeFrom: nextRange.from,
+                  simpleDateTimeTo: nextRange.to,
+                  page: firstPage,
+                });
               }
             }}
             disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
@@ -1222,9 +1216,8 @@ export default function SearchPage() {
           </select>
           {networkId && loadingChannels && <small className="loading-hint"><span className="loading-spinner" />Loading channels...</small>}
           {networkId && !loadingChannels && channels.length === 0 && <small>No channels found for selected network.</small>}
-          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length === 0 && <small>No channels match your filter.</small>}
           {networkId && !loadingChannels && channels.length > 0 && channelOptions.length > 0 && (
-            <small>Showing {channelOptions.length} of {channels.length} channels.</small>
+            <small>{channelOptions.length} channels available.</small>
           )}
           {!loadingChannels && channelId && (
             <small>Reading from: {readSource}</small>

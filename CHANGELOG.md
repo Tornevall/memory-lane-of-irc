@@ -55,6 +55,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Event-type multi-select is now scoped to **Advanced Search** only.
 - Clicking the **Statistics** tab now immediately loads stats from the API using the current filter context (no extra submit click required).
 - Direct entry URLs with `?mode=statistics` now auto-load statistics on page init, even without extra filters.
+- Channel selection now uses a single select box (removed separate channel-filter input), and selecting a channel auto-refreshes results when a search context is active.
 - Nick WHOIS requests now tolerate installs where the IRC events table does not have a `target` column.
 
 ## [2026-07-20]
