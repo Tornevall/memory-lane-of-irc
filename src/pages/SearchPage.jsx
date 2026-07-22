@@ -284,15 +284,21 @@ function ClassicResultRow({ result, shareSearchQueryString }) {
   const nickPart = nick ? `<${nick}>` : '';
   const wherePart = channel ? ` ${channel}` : '';
   const hostPart = userHost ? ` (${userHost})` : '';
-  const entryDate = extractIsoDate(result.occurred_at);
-  const entryYear = entryDate ? entryDate.slice(0, 4) : '';
-  const prefix = `[${formatShortTime(result.occurred_at)}${entryYear ? ` ${entryYear}` : ''}] [${eventType}]`;
+  const isChannelMessage = channel.startsWith('#');
+  const showEventType = !(eventType === 'PRIVMSG' && isChannelMessage);
+  const occurredAtRaw = String(result.occurred_at ?? '').trim();
+  const occurredAtDate = occurredAtRaw ? new Date(occurredAtRaw.replace(' ', 'T')) : null;
+  const occurredAtTitle = occurredAtDate && !Number.isNaN(occurredAtDate.getTime())
+    ? occurredAtDate.toLocaleString()
+    : (occurredAtRaw || 'Unknown date');
+  const timeToken = `[${formatShortTime(result.occurred_at)}]`;
 
   return (
     <div id={rowId} className={`classic-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="classic-main">
         {rowShortId && <a href={rowHref} className="row-anchor-id row-anchor-id-classic" title="Direct link to this row">#{rowShortId}</a>}
-        <span className="classic-prefix">{prefix}</span>
+        <a href={rowHref} className="classic-prefix row-anchor-time" title={occurredAtTitle}>{timeToken}</a>
+        {showEventType && <span className="classic-prefix"> [{eventType}]</span>}
         {nickPart && <span className="classic-nick"> {nickPart}</span>}
         {hostPart && <span className="classic-host">{hostPart}</span>}
         {wherePart && <span className="classic-channel">{wherePart}</span>}
