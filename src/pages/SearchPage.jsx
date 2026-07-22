@@ -840,6 +840,30 @@ export default function SearchPage() {
     await loadDateRange(networkId, channelId);
   }
 
+  function buildPaginationPages(currentPage, maxPage) {
+    const current = Math.max(1, Number.parseInt(String(currentPage || 1), 10) || 1);
+    const last = Math.max(1, Number.parseInt(String(maxPage || 1), 10) || 1);
+    const pages = new Set([1, last]);
+
+    for (let p = current - 2; p <= current + 2; p += 1) {
+      if (p >= 1 && p <= last) {
+        pages.add(p);
+      }
+    }
+
+    const sorted = Array.from(pages).sort((a, b) => a - b);
+    const output = [];
+    let previous = 0;
+    sorted.forEach((p) => {
+      if (previous > 0 && p - previous > 1) {
+        output.push('ellipsis');
+      }
+      output.push(p);
+      previous = p;
+    });
+    return output;
+  }
+
   return (
     <div className="page">
       <h1>Search IRC Logs</h1>
@@ -1067,19 +1091,44 @@ export default function SearchPage() {
             const hasNext = total > 0
               ? currentPage < maxPageByTotal
               : rows.length >= currentLimit;
+            const pageItems = buildPaginationPages(currentPage, maxPageByTotal);
+            const renderPaginationControls = (positionKey = 'top') => (
+              <div className={`results-pagination results-pagination--${positionKey}`}>
+                <button type="button" className="btn-secondary" disabled={loading || !hasPrev} onClick={() => handlePageNavigation(currentPage - 1)}>
+                  Previous
+                </button>
+                <div className="results-page-numbers" aria-label="Page numbers">
+                  {pageItems.map((item, idx) => {
+                    if (item === 'ellipsis') {
+                      return <span key={`ellipsis-${positionKey}-${idx}`} className="results-page-ellipsis">…</span>;
+                    }
+                    const pageNumber = Number(item);
+                    const isActive = pageNumber === currentPage;
+                    return (
+                      <button
+                        key={`page-${positionKey}-${pageNumber}`}
+                        type="button"
+                        className={`btn-secondary results-page-number${isActive ? ' is-active' : ''}`}
+                        disabled={loading || isActive}
+                        aria-current={isActive ? 'page' : undefined}
+                        onClick={() => handlePageNavigation(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="results-page-indicator">
+                  Page {currentPage}{total > 0 ? ` / ${maxPageByTotal}` : ''}
+                </span>
+                <button type="button" className="btn-secondary" disabled={loading || !hasNext} onClick={() => handlePageNavigation(currentPage + 1)}>
+                  Next
+                </button>
+              </div>
+            );
             return (
               <>
-                <div className="results-pagination">
-                  <button type="button" className="btn-secondary" disabled={loading || !hasPrev} onClick={() => handlePageNavigation(currentPage - 1)}>
-                    Previous
-                  </button>
-                  <span className="results-page-indicator">
-                    Page {currentPage}{total > 0 ? ` / ${maxPageByTotal}` : ''}
-                  </span>
-                  <button type="button" className="btn-secondary" disabled={loading || !hasNext} onClick={() => handlePageNavigation(currentPage + 1)}>
-                    Next
-                  </button>
-                </div>
+                {renderPaginationControls('top')}
               </>
             );
           })()}
@@ -1116,6 +1165,55 @@ export default function SearchPage() {
               );
             });
             return rendered;
+          })()}
+          {(() => {
+            const rows = Array.isArray(results.results) ? results.results : [];
+            const total = Number.parseInt(String(results.total ?? rows.length ?? 0), 10) || 0;
+            const currentLimit = normalizePageSize(results.limit ?? limit);
+            const offsetFromResponse = Math.max(0, Number.parseInt(String(results.offset ?? 0), 10) || 0);
+            const pageFromOffset = Math.floor(offsetFromResponse / Math.max(1, currentLimit)) + 1;
+            const currentPage = Math.max(1, Number.parseInt(String(results.page ?? pageFromOffset ?? page ?? 1), 10) || 1);
+            const maxPageByTotal = total > 0 ? Math.max(1, Math.ceil(total / Math.max(1, currentLimit))) : currentPage;
+            const hasPrev = currentPage > 1;
+            const hasNext = total > 0
+              ? currentPage < maxPageByTotal
+              : rows.length >= currentLimit;
+            const pageItems = buildPaginationPages(currentPage, maxPageByTotal);
+
+            return (
+              <div className="results-pagination results-pagination--bottom">
+                <button type="button" className="btn-secondary" disabled={loading || !hasPrev} onClick={() => handlePageNavigation(currentPage - 1)}>
+                  Previous
+                </button>
+                <div className="results-page-numbers" aria-label="Page numbers">
+                  {pageItems.map((item, idx) => {
+                    if (item === 'ellipsis') {
+                      return <span key={`ellipsis-bottom-${idx}`} className="results-page-ellipsis">…</span>;
+                    }
+                    const pageNumber = Number(item);
+                    const isActive = pageNumber === currentPage;
+                    return (
+                      <button
+                        key={`page-bottom-${pageNumber}`}
+                        type="button"
+                        className={`btn-secondary results-page-number${isActive ? ' is-active' : ''}`}
+                        disabled={loading || isActive}
+                        aria-current={isActive ? 'page' : undefined}
+                        onClick={() => handlePageNavigation(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="results-page-indicator">
+                  Page {currentPage}{total > 0 ? ` / ${maxPageByTotal}` : ''}
+                </span>
+                <button type="button" className="btn-secondary" disabled={loading || !hasNext} onClick={() => handlePageNavigation(currentPage + 1)}>
+                  Next
+                </button>
+              </div>
+            );
           })()}
         </div>
       )}
