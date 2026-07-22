@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   simpleSearch,
   advancedSearch,
+  getLogStatistics,
   getNetworks,
   getNetworkChannels,
   getNicknames,
@@ -170,7 +171,9 @@ function normalizeEventTypes(value) {
 }
 
 function buildSearchParamsFromCriteria(criteria) {
-  const normalizedMode = criteria?.mode === 'advanced' ? 'advanced' : 'simple';
+  const normalizedMode = ['simple', 'advanced', 'statistics'].includes(String(criteria?.mode || ''))
+    ? String(criteria.mode)
+    : 'simple';
   const params = new URLSearchParams();
   params.set('mode', normalizedMode);
   if (criteria?.resultView === 'refined') {
@@ -186,7 +189,7 @@ function buildSearchParamsFromCriteria(criteria) {
   pushParam(params, 'limit', criteria?.limit);
   pushParam(params, 'page', criteria?.page);
 
-  if (normalizedMode === 'simple') {
+  if (normalizedMode === 'simple' || normalizedMode === 'statistics') {
     pushParam(params, 'from', criteria?.simpleDateTimeFrom);
     pushParam(params, 'to', criteria?.simpleDateTimeTo);
   } else {
@@ -201,7 +204,8 @@ function buildSearchParamsFromCriteria(criteria) {
 
 function parseCriteriaFromLocation(searchText) {
   const params = new URLSearchParams(String(searchText || ''));
-  const mode = params.get('mode') === 'advanced' ? 'advanced' : 'simple';
+  const rawMode = String(params.get('mode') || '').trim().toLowerCase();
+  const mode = ['simple', 'advanced', 'statistics'].includes(rawMode) ? rawMode : 'simple';
   const view = params.get('view') === 'refined' ? 'refined' : 'classic';
   const rawLimit = normalizePageSize(params.get('limit') || getInitialPageSize());
   const rawPage = Number.parseInt(params.get('page') || '', 10);
@@ -230,6 +234,12 @@ function shouldAutoSearchFromCriteria(criteria) {
     || String(criteria.excludeTerms || '').trim().length > 0;
   if (criteria.mode === 'advanced') {
     return String(criteria.query || '').trim().length > 0 || hasTermFilters;
+  }
+  if (criteria.mode === 'statistics') {
+    return hasTermFilters
+      || String(criteria.query || '').trim().length > 0
+      || String(criteria.channelId || '').trim().length > 0
+      || String(criteria.networkId || '').trim().length > 0;
   }
   return String(criteria.query || '').trim().length > 0 || hasTermFilters || String(criteria.channelId || '').trim().length > 0;
 }
@@ -809,7 +819,9 @@ export default function SearchPage() {
     const apiKey = getApiKey();
     const { updateUrl = true } = options;
     const normalizedCriteria = {
-      mode: criteria?.mode === 'advanced' ? 'advanced' : 'simple',
+      mode: ['simple', 'advanced', 'statistics'].includes(String(criteria?.mode || ''))
+        ? String(criteria.mode)
+        : 'simple',
       resultView: criteria?.resultView === 'refined' ? 'refined' : 'classic',
       query: String(criteria?.query ?? ''),
       includeTerms: String(criteria?.includeTerms ?? ''),
@@ -870,7 +882,12 @@ export default function SearchPage() {
           normalizedCriteria.eventTypes,
           normalizedCriteria.focusId
         );
-      } else {
+        setResults({
+          ...data,
+          view_mode: normalizedCriteria.mode,
+          results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
+        });
+      } else if (normalizedCriteria.mode === 'advanced') {
         const body = {
           query: normalizedCriteria.query,
           include_terms: normalizedCriteria.includeTerms,
@@ -886,11 +903,38 @@ export default function SearchPage() {
         if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
         if (normalizedCriteria.eventTypes.length > 0) body.event_types = normalizedCriteria.eventTypes.join(',');
         data = await advancedSearch(apiKey, body);
+        setResults({
+          ...data,
+          view_mode: normalizedCriteria.mode,
+          results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
+        });
+      } else {
+        const effectiveFrom = normalizedCriteria.simpleDateTimeFrom
+          && normalizedCriteria.simpleDateTimeTo
+          && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
+          ? normalizedCriteria.simpleDateTimeTo
+          : normalizedCriteria.simpleDateTimeFrom;
+        const effectiveTo = normalizedCriteria.simpleDateTimeFrom
+          && normalizedCriteria.simpleDateTimeTo
+          && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
+          ? normalizedCriteria.simpleDateTimeFrom
+          : normalizedCriteria.simpleDateTimeTo;
+        data = await getLogStatistics(apiKey, {
+          query: normalizedCriteria.query,
+          include_terms: normalizedCriteria.includeTerms,
+          exclude_terms: normalizedCriteria.excludeTerms,
+          network_id: normalizedCriteria.networkId || '',
+          channel_id: normalizedCriteria.channelId || '',
+          datetime_from: effectiveFrom,
+          datetime_to: effectiveTo,
+          date_from: effectiveFrom ? effectiveFrom.slice(0, 10) : '',
+          date_to: effectiveTo ? effectiveTo.slice(0, 10) : '',
+        });
+        setResults({
+          ...data,
+          view_mode: normalizedCriteria.mode,
+        });
       }
-      setResults({
-        ...data,
-        results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
-      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1043,6 +1087,12 @@ export default function SearchPage() {
         >
           Advanced Search
         </button>
+        <button
+          className={mode === 'statistics' ? 'active' : ''}
+          onClick={() => setMode('statistics')}
+        >
+          Statistics
+        </button>
       </div>
 
       <form onSubmit={handleSearch} className="search-form">
@@ -1052,8 +1102,8 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={mode === 'simple' ? 'Optional. Leave empty to open channel logs.' : 'Search query...'}
-            required={mode !== 'simple' && !String(includeTerms || '').trim() && !String(excludeTerms || '').trim()}
+            placeholder={mode === 'simple' ? 'Optional. Leave empty to open channel logs.' : (mode === 'statistics' ? 'Optional filter for statistics...' : 'Search query...')}
+            required={mode === 'advanced' && !String(includeTerms || '').trim() && !String(excludeTerms || '').trim()}
           />
         </div>
         <div className="form-row">
@@ -1073,23 +1123,6 @@ export default function SearchPage() {
             onChange={(e) => setExcludeTerms(e.target.value)}
             placeholder={'e.g. bot or "received server"'}
           />
-        </div>
-        <div className="form-row">
-          <label>Event types (optional, multi-select)</label>
-          <select
-            multiple
-            className="multi-select"
-            value={eventTypes}
-            onChange={(e) => {
-              const next = Array.from(e.target.selectedOptions).map((option) => String(option.value || '').trim()).filter((v) => v);
-              setEventTypes(normalizeEventTypes(next));
-            }}
-          >
-            {EVENT_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-          <small>Hold Ctrl (Windows) to select multiple types.</small>
         </div>
         <div className="form-row">
           <label>Network (optional)</label>
@@ -1252,6 +1285,23 @@ export default function SearchPage() {
                 placeholder="To: yyyy-mm-dd"
               />
             </div>
+            <div className="form-row">
+              <label>Event types (optional, multi-select)</label>
+              <select
+                multiple
+                className="multi-select"
+                value={eventTypes}
+                onChange={(e) => {
+                  const next = Array.from(e.target.selectedOptions).map((option) => String(option.value || '').trim()).filter((v) => v);
+                  setEventTypes(normalizeEventTypes(next));
+                }}
+              >
+                {EVENT_TYPE_OPTIONS.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+              <small>Hold Ctrl (Windows) to select multiple types.</small>
+            </div>
           </>
         )}
         <div className="form-row">
@@ -1270,7 +1320,7 @@ export default function SearchPage() {
           </select>
         </div>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Loading…' : (mode === 'simple' && !String(query || '').trim() ? 'Open channel' : 'Search')}
+          {loading ? 'Loading…' : (mode === 'statistics' ? 'Load statistics' : (mode === 'simple' && !String(query || '').trim() ? 'Open channel' : 'Search'))}
         </button>
       </form>
 
@@ -1278,6 +1328,47 @@ export default function SearchPage() {
 
       {results && (
         <div className="results">
+          {results.view_mode === 'statistics' && (
+            <div className="stats-panel">
+              <div className="stats-grid">
+                <div className="stats-card"><div className="stats-label">Total rows</div><div className="stats-value">{Number(results.total_rows || 0).toLocaleString()}</div></div>
+                <div className="stats-card"><div className="stats-label">Unique dates</div><div className="stats-value">{Number(results.unique_dates || 0).toLocaleString()}</div></div>
+                <div className="stats-card"><div className="stats-label">First seen</div><div className="stats-value">{String(results.first_occurred_at || 'n/a')}</div></div>
+                <div className="stats-card"><div className="stats-label">Last seen</div><div className="stats-value">{String(results.last_occurred_at || 'n/a')}</div></div>
+              </div>
+
+              <div className="stats-sections">
+                <div className="stats-section">
+                  <h3>Event type counts</h3>
+                  {Array.isArray(results.event_type_counts) && results.event_type_counts.length > 0 ? (
+                    <div className="stats-list">
+                      {results.event_type_counts.map((row) => (
+                        <div key={`etype-${row.event_type}`} className="stats-list-row">
+                          <span>{String(row.event_type || 'UNKNOWN')}</span>
+                          <span>{Number(row.row_count || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p>No event type data.</p>}
+                </div>
+                <div className="stats-section">
+                  <h3>Top nicks</h3>
+                  {Array.isArray(results.top_nicks) && results.top_nicks.length > 0 ? (
+                    <div className="stats-list">
+                      {results.top_nicks.map((row) => (
+                        <div key={`nick-${row.nick}`} className="stats-list-row">
+                          <span>{String(row.nick || '?')}</span>
+                          <span>{Number(row.row_count || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p>No nick data.</p>}
+                </div>
+              </div>
+            </div>
+          )}
+          {results.view_mode !== 'statistics' && (
+            <>
           {(() => {
             const rows = Array.isArray(results.results) ? results.results : [];
             const total = Number.parseInt(String(results.total ?? rows.length ?? 0), 10) || 0;
@@ -1424,6 +1515,8 @@ export default function SearchPage() {
               </div>
             );
           })()}
+            </>
+          )}
         </div>
       )}
       {whoisState.open && (

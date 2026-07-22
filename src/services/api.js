@@ -256,6 +256,22 @@ export async function advancedSearch(apiKey, body) {
   return data || {};
 }
 
+export async function getLogStatistics(apiKey, body = {}) {
+  const params = new URLSearchParams();
+  params.set('aggregate', 'stats');
+  appendIfPresent(params, 'q', body?.query);
+  appendIfPresent(params, 'include_terms', body?.include_terms);
+  appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
+  appendIfPresent(params, 'network_id', body?.network_id);
+  appendIfPresent(params, 'channel_id', body?.channel_id);
+  appendIfPresent(params, 'date_from', body?.date_from);
+  appendIfPresent(params, 'date_to', body?.date_to);
+  appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
+  appendIfPresent(params, 'datetime_to', normalizeDateTimeParam(body?.datetime_to));
+  const data = await fetchLogQuery(apiKey, params, 'Statistics failed');
+  return data || {};
+}
+
 export async function getHighlights(apiKey) {
   const data = await fetchWithFallback(
     apiKey,
