@@ -13,6 +13,11 @@ import {
 const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
 const DEFAULT_PAGE_SIZE = 500;
 const PAGE_SIZE_COOKIE = 'irclogs_page_size';
+const EVENT_TYPE_OPTIONS = [
+  'PRIVMSG', 'ACTION', 'JOIN', 'PART', 'QUIT', 'NICK', 'KICK', 'TOPIC', 'MODE',
+  'NOTICE', 'CTCP', 'INVITE', 'NOTIFY', 'WHOIS', 'NAMES', 'USERS',
+  'RAW', 'ERROR', 'WALLOPS', 'SERVER', 'SQUIT', 'NETSPLIT', 'NETMERGE',
+];
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -151,6 +156,18 @@ function pushParam(params, key, value) {
   }
 }
 
+function normalizeEventTypes(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value
+      .map((item) => String(item || '').trim().toUpperCase())
+      .filter((item) => item !== '')));
+  }
+  if (typeof value === 'string') {
+    return normalizeEventTypes(value.split(','));
+  }
+  return [];
+}
+
 function buildSearchParamsFromCriteria(criteria) {
   const normalizedMode = criteria?.mode === 'advanced' ? 'advanced' : 'simple';
   const params = new URLSearchParams();
@@ -176,6 +193,7 @@ function buildSearchParamsFromCriteria(criteria) {
     pushParam(params, 'date_from', criteria?.dateFrom);
     pushParam(params, 'date_to', criteria?.dateTo);
   }
+  pushParam(params, 'event_types', normalizeEventTypes(criteria?.eventTypes).join(','));
 
   return params.toString();
 }
@@ -199,6 +217,7 @@ function parseCriteriaFromLocation(searchText) {
     nick: params.get('nick') || '',
     dateFrom: params.get('date_from') || '',
     dateTo: params.get('date_to') || '',
+    eventTypes: normalizeEventTypes(params.get('event_types') || ''),
     focusId: params.get('focus_id') || '',
     limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? rawLimit : DEFAULT_PAGE_SIZE,
     page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -435,6 +454,7 @@ export default function SearchPage() {
   const [loadingNetworks, setLoadingNetworks] = useState(false);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [nick, setNick] = useState('');
+  const [eventTypes, setEventTypes] = useState([]);
   const [nickSuggestions, setNickSuggestions] = useState([]);
   const [loadingNickSuggestions, setLoadingNickSuggestions] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -735,6 +755,7 @@ export default function SearchPage() {
     setNick(parsedCriteria.nick);
     setDateFrom(parsedCriteria.dateFrom);
     setDateTo(parsedCriteria.dateTo);
+    setEventTypes(normalizeEventTypes(parsedCriteria.eventTypes));
     setLimit(normalizePageSize(parsedCriteria.limit));
     setPage(parsedCriteria.page);
 
@@ -784,6 +805,7 @@ export default function SearchPage() {
       nick: String(criteria?.nick ?? ''),
       dateFrom: String(criteria?.dateFrom ?? ''),
       dateTo: String(criteria?.dateTo ?? ''),
+      eventTypes: normalizeEventTypes(criteria?.eventTypes),
       focusId: String(criteria?.focusId ?? ''),
       limit: Number(criteria?.limit ?? DEFAULT_PAGE_SIZE),
       page: Number(criteria?.page ?? 1),
@@ -829,6 +851,7 @@ export default function SearchPage() {
           Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
           trimmedIncludeTerms,
           trimmedExcludeTerms,
+          normalizedCriteria.eventTypes,
           normalizedCriteria.focusId
         );
       } else {
@@ -845,6 +868,7 @@ export default function SearchPage() {
         if (normalizedCriteria.nick) body.nick = normalizedCriteria.nick;
         if (normalizedCriteria.dateFrom) body.date_from = normalizedCriteria.dateFrom;
         if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
+        if (normalizedCriteria.eventTypes.length > 0) body.event_types = normalizedCriteria.eventTypes.join(',');
         data = await advancedSearch(apiKey, body);
       }
       setResults({
@@ -875,6 +899,7 @@ export default function SearchPage() {
       nick,
       dateFrom,
       dateTo,
+      eventTypes,
       limit,
       page: firstPage,
     });
@@ -896,6 +921,7 @@ export default function SearchPage() {
       nick,
       dateFrom,
       dateTo,
+      eventTypes,
       limit,
       page: targetPage,
     });
@@ -983,6 +1009,23 @@ export default function SearchPage() {
             onChange={(e) => setExcludeTerms(e.target.value)}
             placeholder={'e.g. bot or "received server"'}
           />
+        </div>
+        <div className="form-row">
+          <label>Event types (optional, multi-select)</label>
+          <select
+            multiple
+            className="multi-select"
+            value={eventTypes}
+            onChange={(e) => {
+              const next = Array.from(e.target.selectedOptions).map((option) => String(option.value || '').trim()).filter((v) => v);
+              setEventTypes(normalizeEventTypes(next));
+            }}
+          >
+            {EVENT_TYPE_OPTIONS.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+          <small>Hold Ctrl (Windows) to select multiple types.</small>
         </div>
         <div className="form-row">
           <label>Network (optional)</label>

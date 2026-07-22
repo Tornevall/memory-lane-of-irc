@@ -183,6 +183,10 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   width: 100%;
 }
 
+.form-row select.multi-select {
+  min-height: 8.5rem;
+}
+
 .form-row input:focus, .form-row textarea:focus {
   outline: none;
   border-color: #7c8cf8;
