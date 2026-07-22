@@ -767,6 +767,7 @@ export default function SearchPage() {
   }
 
   const channelOptions = Array.isArray(channels) ? channels : [];
+  const channelListSize = networkId ? Math.min(Math.max(channelOptions.length + 1, 8), 18) : 1;
 
   function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
@@ -1389,6 +1390,8 @@ export default function SearchPage() {
         <div className="form-row">
           <label>Channel (optional)</label>
           <select
+            className="channel-selectbox"
+            size={channelListSize}
             value={channelId}
             onChange={async (e) => {
               const selected = e.target.value;
