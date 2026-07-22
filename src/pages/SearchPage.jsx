@@ -212,10 +212,12 @@ function shouldAutoSearchFromCriteria(criteria) {
   return String(criteria.query || '').trim().length > 0 || hasTermFilters || String(criteria.channelId || '').trim().length > 0;
 }
 
-function buildRowIdentity(result, shareSearchQueryString = '') {
+function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAnchor = true) {
   const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
   const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const searchPart = shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || '');
+  const searchPart = includeSearchInAnchor
+    ? (shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || ''))
+    : '';
   return {
     rowId,
     rowHref: `${window.location.pathname}${searchPart}#${rowId}`,
@@ -244,8 +246,8 @@ function extractIsoDate(value) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
-function RefinedResultRow({ result, shareSearchQueryString }) {
-  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString);
+function RefinedResultRow({ result, shareSearchQueryString, includeSearchInAnchor }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const rawText = String(result.raw_line ?? result.message ?? '');
   const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
@@ -273,8 +275,8 @@ function RefinedResultRow({ result, shareSearchQueryString }) {
   );
 }
 
-function ClassicResultRow({ result, shareSearchQueryString }) {
-  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString);
+function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAnchor }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
   const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
@@ -427,6 +429,7 @@ export default function SearchPage() {
   const [loadingDateRange, setLoadingDateRange] = useState(false);
   const [results, setResults] = useState(null);
   const [lastSearchQueryString, setLastSearchQueryString] = useState('');
+  const [includeQueryInAnchorLinks, setIncludeQueryInAnchorLinks] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const channelsRequestSeqRef = useRef(0);
@@ -1143,9 +1146,19 @@ export default function SearchPage() {
               Found {results.total ?? results.results?.length ?? 0} results
               {results.page && ` (page ${results.page})`}
             </div>
-            <div className="view-toggle">
-              <button type="button" className={resultView === 'classic' ? 'active' : ''} onClick={() => setResultView('classic')}>Classic log view</button>
-              <button type="button" className={resultView === 'refined' ? 'active' : ''} onClick={() => setResultView('refined')}>Refined cards</button>
+            <div className="results-controls">
+              <label className="anchor-link-toggle" title="Include current query/filter params in # anchors">
+                <input
+                  type="checkbox"
+                  checked={includeQueryInAnchorLinks}
+                  onChange={(e) => setIncludeQueryInAnchorLinks(Boolean(e.target.checked))}
+                />
+                <span>Include query in # links</span>
+              </label>
+              <div className="view-toggle">
+                <button type="button" className={resultView === 'classic' ? 'active' : ''} onClick={() => setResultView('classic')}>Classic log view</button>
+                <button type="button" className={resultView === 'refined' ? 'active' : ''} onClick={() => setResultView('refined')}>Refined cards</button>
+              </div>
             </div>
           </div>
           {results.results?.length === 0 && <p>No results found.</p>}
@@ -1166,8 +1179,8 @@ export default function SearchPage() {
               const rowKey = String(row.id ?? row.log_event_id ?? `${row.occurred_at}-${row.nick}-${row.event_type}`);
               rendered.push(
                 resultView === 'classic'
-                  ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} />
-                  : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} />
+                  ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} />
+                  : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} />
               );
             });
             return rendered;

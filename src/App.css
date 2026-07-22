@@ -317,6 +317,26 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   flex-wrap: wrap;
 }
 
+.results-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.anchor-link-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.anchor-link-toggle input {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
 .results-pagination {
   display: inline-flex;
   align-items: center;
