@@ -62,6 +62,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Nick WHOIS requests now tolerate installs where the IRC events table does not have a `target` column.
 - Added a dedicated nick seen API integration (`/irc/api/nick-seen`) in the nick modal, showing first seen, last seen, total activity, active dates, and top event-type activity with direct viewer link.
 - Statistics charts now render richer date axes (including years) and explicit date-range labels, and top-nicks charts now support Bar/Line/Pie with per-nick toggles.
+- Mode switching now auto-loads logs when clicking **Simple** or **Advanced**, and statistics output is cleared immediately on that transition.
 
 ## [2026-07-20]
 

@@ -1605,14 +1605,27 @@ export default function SearchPage() {
       ? String(nextMode)
       : 'simple';
     setMode(normalizedMode);
-
-    if (normalizedMode !== 'statistics') {
+    const firstPage = 1;
+    setPage(firstPage);
+    if (normalizedMode === 'statistics') {
+      await executeCurrentSearch({ mode: 'statistics', page: firstPage });
       return;
     }
 
-    const firstPage = 1;
-    setPage(firstPage);
-    await executeCurrentSearch({ mode: 'statistics', page: firstPage });
+    // Hide statistics output immediately when switching back to log modes.
+    setResults(null);
+    setError('');
+
+    const canAutoLoadSimple = String(query || '').trim() !== ''
+      || String(includeTerms || '').trim() !== ''
+      || String(excludeTerms || '').trim() !== ''
+      || String(channelId || '').trim() !== '';
+    const canAutoLoad = normalizedMode === 'simple' ? canAutoLoadSimple : true;
+    if (!canAutoLoad) {
+      return;
+    }
+
+    await executeCurrentSearch({ mode: normalizedMode, page: firstPage });
   }
 
   return (
