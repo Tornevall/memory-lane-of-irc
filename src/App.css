@@ -673,6 +673,17 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   background: #0b1220;
 }
 
+.stats-chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.stats-chart-date-range {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
 .stats-chart-legend {
   display: flex;
   flex-direction: column;
