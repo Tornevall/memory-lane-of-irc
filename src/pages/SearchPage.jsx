@@ -20,7 +20,8 @@ const EVENT_TYPE_OPTIONS = [
   'NOTICE', 'CTCP', 'INVITE', 'NOTIFY', 'WHOIS', 'NAMES', 'USERS',
   'RAW', 'ERROR', 'WALLOPS', 'SERVER', 'SQUIT', 'NETSPLIT', 'NETMERGE',
 ];
-const CHAT_EVENT_TYPES = new Set(['PRIVMSG', 'ACTION', 'NOTICE']);
+const DEFAULT_ACTIVE_EVENT_TYPES = ['PRIVMSG', 'ACTION'];
+const CHAT_EVENT_TYPES = new Set(DEFAULT_ACTIVE_EVENT_TYPES);
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -208,6 +209,7 @@ function parseCriteriaFromLocation(searchText) {
   const rawMode = String(params.get('mode') || '').trim().toLowerCase();
   const mode = ['simple', 'advanced', 'statistics'].includes(rawMode) ? rawMode : 'simple';
   const view = params.get('view') === 'refined' ? 'refined' : 'classic';
+  const rawEventTypes = params.get('event_types');
   const rawLimit = normalizePageSize(params.get('limit') || getInitialPageSize());
   const rawPage = Number.parseInt(params.get('page') || '', 10);
   return {
@@ -223,7 +225,9 @@ function parseCriteriaFromLocation(searchText) {
     nick: params.get('nick') || '',
     dateFrom: params.get('date_from') || '',
     dateTo: params.get('date_to') || '',
-    eventTypes: normalizeEventTypes(params.get('event_types') || ''),
+    eventTypes: rawEventTypes === null
+      ? [...DEFAULT_ACTIVE_EVENT_TYPES]
+      : normalizeEventTypes(rawEventTypes || ''),
     focusId: params.get('focus_id') || '',
     limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? rawLimit : DEFAULT_PAGE_SIZE,
     page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -536,6 +540,7 @@ function bucketDailyRows(rows, maxBuckets = 120) {
       channel_event_rows: slice.reduce((sum, row) => sum + toSafeNumber(row.channel_event_rows), 0),
     });
   }
+
   return buckets;
 }
 
@@ -683,7 +688,7 @@ export default function SearchPage() {
   const [loadingNetworks, setLoadingNetworks] = useState(false);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [nick, setNick] = useState('');
-  const [eventTypes, setEventTypes] = useState([]);
+  const [eventTypes, setEventTypes] = useState([...DEFAULT_ACTIVE_EVENT_TYPES]);
   const [nickSuggestions, setNickSuggestions] = useState([]);
   const [loadingNickSuggestions, setLoadingNickSuggestions] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -768,6 +773,7 @@ export default function SearchPage() {
 
   const channelOptions = Array.isArray(channels) ? channels : [];
   const channelListSize = networkId ? Math.min(Math.max(channelOptions.length + 1, 8), 18) : 1;
+  const hasAllEventTypesSelected = EVENT_TYPE_OPTIONS.every((type) => eventTypes.includes(type));
 
   function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
@@ -1122,6 +1128,7 @@ export default function SearchPage() {
           exclude_terms: normalizedCriteria.excludeTerms,
           network_id: normalizedCriteria.networkId || '',
           channel_id: normalizedCriteria.channelId || '',
+          event_types: normalizedCriteria.eventTypes.length > 0 ? normalizedCriteria.eventTypes.join(',') : '',
           datetime_from: effectiveFrom,
           datetime_to: effectiveTo,
           date_from: effectiveFrom ? effectiveFrom.slice(0, 10) : '',
@@ -1268,6 +1275,35 @@ export default function SearchPage() {
     });
   }
 
+  async function applyEventTypeSelection(nextTypesInput) {
+    const normalized = normalizeEventTypes(nextTypesInput);
+    const nextTypes = normalized.length > 0 ? normalized : [...DEFAULT_ACTIVE_EVENT_TYPES];
+    setEventTypes(nextTypes);
+    const hasActiveSearchContext = results !== null
+      || String(query || '').trim() !== ''
+      || String(includeTerms || '').trim() !== ''
+      || String(excludeTerms || '').trim() !== ''
+      || mode === 'statistics';
+    if (hasActiveSearchContext) {
+      const firstPage = 1;
+      setPage(firstPage);
+      await executeCurrentSearch({
+        eventTypes: nextTypes,
+        page: firstPage,
+      });
+    }
+  }
+
+  async function toggleEventType(type) {
+    const normalizedType = String(type || '').trim().toUpperCase();
+    if (!normalizedType) return;
+    const existing = normalizeEventTypes(eventTypes);
+    const nextTypes = existing.includes(normalizedType)
+      ? existing.filter((item) => item !== normalizedType)
+      : normalizeEventTypes([...existing, normalizedType]);
+    await applyEventTypeSelection(nextTypes);
+  }
+
   async function executeCurrentSearch(overrides = {}) {
     const nextCriteria = {
       mode,
@@ -1357,6 +1393,40 @@ export default function SearchPage() {
             onChange={(e) => setExcludeTerms(e.target.value)}
             placeholder={'e.g. bot or "received server"'}
           />
+        </div>
+        <div className="form-row">
+          <label>Event types (interactive)</label>
+          <div className="event-type-preset-row">
+            <button
+              type="button"
+              className={`btn-secondary${eventTypes.length === DEFAULT_ACTIVE_EVENT_TYPES.length && DEFAULT_ACTIVE_EVENT_TYPES.every((type) => eventTypes.includes(type)) ? ' active' : ''}`}
+              onClick={() => applyEventTypeSelection(DEFAULT_ACTIVE_EVENT_TYPES)}
+            >
+              Chat only (PRIVMSG + ACTION)
+            </button>
+            <button
+              type="button"
+              className={`btn-secondary${hasAllEventTypesSelected ? ' active' : ''}`}
+              onClick={() => applyEventTypeSelection(EVENT_TYPE_OPTIONS)}
+            >
+              All event types
+            </button>
+          </div>
+          <div className="event-type-toggle-list">
+            {EVENT_TYPE_OPTIONS.map((type) => {
+              const isActive = eventTypes.includes(type);
+              return (
+                <button
+                  key={`toggle-${type}`}
+                  type="button"
+                  className={`event-type-toggle${isActive ? ' is-active' : ''}`}
+                  onClick={() => toggleEventType(type)}
+                >
+                  {type}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="form-row">
           <label>Network (optional)</label>
@@ -1526,23 +1596,6 @@ export default function SearchPage() {
                 onChange={setDateTo}
                 placeholder="To: yyyy-mm-dd"
               />
-            </div>
-            <div className="form-row">
-              <label>Event types (optional, multi-select)</label>
-              <select
-                multiple
-                className="multi-select"
-                value={eventTypes}
-                onChange={(e) => {
-                  const next = Array.from(e.target.selectedOptions).map((option) => String(option.value || '').trim()).filter((v) => v);
-                  setEventTypes(normalizeEventTypes(next));
-                }}
-              >
-                {EVENT_TYPE_OPTIONS.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-              <small>Hold Ctrl (Windows) to select multiple types.</small>
             </div>
           </>
         )}

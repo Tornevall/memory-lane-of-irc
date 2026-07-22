@@ -264,6 +264,7 @@ export async function getLogStatistics(apiKey, body = {}) {
   appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
   appendIfPresent(params, 'network_id', body?.network_id);
   appendIfPresent(params, 'channel_id', body?.channel_id);
+  appendIfPresent(params, 'event_types', body?.event_types);
   appendIfPresent(params, 'date_from', body?.date_from);
   appendIfPresent(params, 'date_to', body?.date_to);
   appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
