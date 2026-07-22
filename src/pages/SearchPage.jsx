@@ -198,6 +198,7 @@ function parseCriteriaFromLocation(searchText) {
     nick: params.get('nick') || '',
     dateFrom: params.get('date_from') || '',
     dateTo: params.get('date_to') || '',
+    focusId: params.get('focus_id') || '',
     limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? rawLimit : DEFAULT_PAGE_SIZE,
     page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
   };
@@ -218,19 +219,20 @@ function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAn
   const rowId = databaseId
     ? `row-${databaseId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     : `row-fallback-${String(fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  let searchPart = '';
-  if (includeSearchInAnchor) {
-    searchPart = shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || '');
-  } else {
-    const params = new URLSearchParams(String(window.location.search || '').replace(/^\?/, ''));
+  const params = includeSearchInAnchor
+    ? new URLSearchParams(
+      String(shareSearchQueryString || String(window.location.search || '').replace(/^\?/, ''))
+    )
+    : new URLSearchParams(String(window.location.search || '').replace(/^\?/, ''));
+  if (!includeSearchInAnchor) {
     params.delete('q');
     params.delete('query');
-    if (databaseId) {
-      params.set('focus_id', databaseId);
-    }
-    const sanitized = params.toString();
-    searchPart = sanitized ? `?${sanitized}` : '';
   }
+  if (databaseId) {
+    params.set('focus_id', databaseId);
+  }
+  const sanitized = params.toString();
+  const searchPart = sanitized ? `?${sanitized}` : '';
   const baseUrl = `${window.location.origin}${window.location.pathname}`;
   return {
     rowId,
@@ -737,6 +739,7 @@ export default function SearchPage() {
       nick: String(criteria?.nick ?? ''),
       dateFrom: String(criteria?.dateFrom ?? ''),
       dateTo: String(criteria?.dateTo ?? ''),
+      focusId: String(criteria?.focusId ?? ''),
       limit: Number(criteria?.limit ?? DEFAULT_PAGE_SIZE),
       page: Number(criteria?.page ?? 1),
     };
@@ -780,13 +783,15 @@ export default function SearchPage() {
           normalizePageSize(normalizedCriteria.limit),
           Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
           trimmedIncludeTerms,
-          trimmedExcludeTerms
+          trimmedExcludeTerms,
+          normalizedCriteria.focusId
         );
       } else {
         const body = {
           query: normalizedCriteria.query,
           include_terms: normalizedCriteria.includeTerms,
           exclude_terms: normalizedCriteria.excludeTerms,
+          focus_id: normalizedCriteria.focusId,
           limit: normalizePageSize(normalizedCriteria.limit),
           page: Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
         };

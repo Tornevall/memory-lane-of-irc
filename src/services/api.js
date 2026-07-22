@@ -211,7 +211,8 @@ export async function simpleSearch(
   limit = '',
   page = '',
   includeTerms = '',
-  excludeTerms = ''
+  excludeTerms = '',
+  focusId = ''
 ) {
   const normalizedDateFrom = normalizeDateTimeParam(dateFrom);
   const normalizedDateTo = normalizeDateTimeParam(dateTo);
@@ -221,6 +222,7 @@ export async function simpleSearch(
   appendIfPresent(params, 'exclude_terms', excludeTerms);
   appendIfPresent(params, 'network_id', networkId);
   appendIfPresent(params, 'channel_id', channelId);
+  appendIfPresent(params, 'focus_id', focusId);
   appendPagination(params, limit, page);
   appendIfPresent(params, 'datetime_from', normalizedDateFrom);
   appendIfPresent(params, 'datetime_to', normalizedDateTo);
@@ -245,6 +247,7 @@ export async function advancedSearch(apiKey, body) {
   appendIfPresent(params, 'nick', body?.nick);
   appendIfPresent(params, 'date_from', body?.date_from);
   appendIfPresent(params, 'date_to', body?.date_to);
+  appendIfPresent(params, 'focus_id', body?.focus_id);
   appendPagination(params, body?.limit, body?.page);
   const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
