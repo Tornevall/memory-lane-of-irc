@@ -218,9 +218,10 @@ function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAn
   const searchPart = includeSearchInAnchor
     ? (shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || ''))
     : '';
+  const baseUrl = `${window.location.origin}${window.location.pathname}`;
   return {
     rowId,
-    rowHref: `${window.location.pathname}${searchPart}#${rowId}`,
+    rowHref: `${baseUrl}${searchPart}#${rowId}`,
     hasHashMatch: String(window.location.hash || '') === `#${rowId}`,
   };
 }
