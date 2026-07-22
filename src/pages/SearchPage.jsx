@@ -828,14 +828,16 @@ export default function SearchPage() {
     });
   }
 
-  function handleSimpleDateReset() {
-    if (simpleMinDateTime || simpleMaxDateTime) {
-      setSimpleDateTimeFrom(simpleMinDateTime || '');
-      setSimpleDateTimeTo(simpleMaxDateTime || '');
+  async function handleSimpleDateReset() {
+    if (!channelId) {
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
       return;
     }
-    setSimpleDateTimeFrom('');
-    setSimpleDateTimeTo('');
+
+    await loadDateRange(networkId, channelId);
   }
 
   return (
