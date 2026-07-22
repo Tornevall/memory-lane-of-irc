@@ -12,6 +12,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added Makefile `help` target (default) to list available build/dev commands.
 - Added `AGENTS.md` guidance for IRCLogs React architecture, import/review expectations, and deployment constraints.
 - Added mandatory release-governance rules in `AGENTS.md`: push every change to GitHub and keep changelog entries comprehensive.
+- Added a third search mode tab, **Statistics**, powered by backend API aggregation (`aggregate=stats`) for totals, time range, event-type counts, and top nick summaries.
 
 ### Changed
 - Default search result rendering now prefers raw IRC log lines (`raw_line`) to keep the classic log look while preserving the refined card layout.
@@ -51,6 +52,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Fixed simple search/date-range wiring regressions so date range helper and read-source helper are callable at runtime (no undefined function errors).
 - Upgraded simple-mode date control to a real date-range picker (`from` + `to`) with channel-scoped min/max constraints from `first_date`/`last_date`.
 - Reworked date inputs to include explicit calendar buttons (`📅`) plus manual text entry parsing (`YYYY-MM-DD`, `YYYY/MM/DD`, `DD-MM-YYYY`), so both picker UI and free-typing are supported.
+- Event-type multi-select is now scoped to **Advanced Search** only.
+- Clicking the **Statistics** tab now immediately loads stats from the API using the current filter context (no extra submit click required).
+- Nick WHOIS requests now tolerate installs where the IRC events table does not have a `target` column.
 
 ## [2026-07-20]
 

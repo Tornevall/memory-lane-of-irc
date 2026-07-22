@@ -1071,25 +1071,56 @@ export default function SearchPage() {
     });
   }
 
+  async function handleModeChange(nextMode) {
+    const normalizedMode = ['simple', 'advanced', 'statistics'].includes(String(nextMode || ''))
+      ? String(nextMode)
+      : 'simple';
+    setMode(normalizedMode);
+
+    if (normalizedMode !== 'statistics') {
+      return;
+    }
+
+    const firstPage = 1;
+    setPage(firstPage);
+    await executeSearch({
+      mode: 'statistics',
+      resultView,
+      query,
+      includeTerms,
+      excludeTerms,
+      networkId,
+      channelId,
+      simpleDateTimeFrom,
+      simpleDateTimeTo,
+      nick,
+      dateFrom,
+      dateTo,
+      eventTypes,
+      limit,
+      page: firstPage,
+    });
+  }
+
   return (
     <div className="page">
       <h1>Search IRC Logs</h1>
       <div className="mode-toggle">
         <button
           className={mode === 'simple' ? 'active' : ''}
-          onClick={() => setMode('simple')}
+          onClick={() => handleModeChange('simple')}
         >
           Simple Search
         </button>
         <button
           className={mode === 'advanced' ? 'active' : ''}
-          onClick={() => setMode('advanced')}
+          onClick={() => handleModeChange('advanced')}
         >
           Advanced Search
         </button>
         <button
           className={mode === 'statistics' ? 'active' : ''}
-          onClick={() => setMode('statistics')}
+          onClick={() => handleModeChange('statistics')}
         >
           Statistics
         </button>
