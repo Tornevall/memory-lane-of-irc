@@ -23,6 +23,19 @@ const EVENT_TYPE_OPTIONS = [
 ];
 const DEFAULT_ACTIVE_EVENT_TYPES = ['PRIVMSG', 'ACTION'];
 const CHAT_EVENT_TYPES = new Set(DEFAULT_ACTIVE_EVENT_TYPES);
+const ADVANCED_QUERY_SCOPE_OPTIONS = [
+  { value: 'all', label: 'All fields' },
+  { value: 'message', label: 'Channel text' },
+  { value: 'nick', label: 'Nick/name' },
+  { value: 'host', label: 'Host/userhost' },
+  { value: 'channel', label: 'Channel name' },
+  { value: 'target', label: 'Target/recipient' },
+];
+
+function normalizeAdvancedQueryScope(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ADVANCED_QUERY_SCOPE_OPTIONS.some((item) => item.value === normalized) ? normalized : 'all';
+}
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -196,6 +209,7 @@ function buildSearchParamsFromCriteria(criteria) {
     pushParam(params, 'from', criteria?.simpleDateTimeFrom);
     pushParam(params, 'to', criteria?.simpleDateTimeTo);
   } else {
+    pushParam(params, 'query_scope', normalizeAdvancedQueryScope(criteria?.queryScope));
     pushParam(params, 'nick', criteria?.nick);
     pushParam(params, 'date_from', criteria?.dateFrom);
     pushParam(params, 'date_to', criteria?.dateTo);
@@ -223,6 +237,7 @@ function parseCriteriaFromLocation(searchText) {
     channelId: params.get('channel') || '',
     simpleDateTimeFrom: params.get('from') || '',
     simpleDateTimeTo: params.get('to') || '',
+    queryScope: normalizeAdvancedQueryScope(params.get('query_scope') || 'all'),
     nick: params.get('nick') || '',
     dateFrom: params.get('date_from') || '',
     dateTo: params.get('date_to') || '',
@@ -903,6 +918,7 @@ export default function SearchPage() {
   const [mode, setMode] = useState('simple');
   const [resultView, setResultView] = useState('classic');
   const [query, setQuery] = useState('');
+  const [queryScope, setQueryScope] = useState('all');
   const [includeTerms, setIncludeTerms] = useState('');
   const [excludeTerms, setExcludeTerms] = useState('');
   const [networkId, setNetworkId] = useState('');
@@ -1226,6 +1242,7 @@ export default function SearchPage() {
     setMode(parsedCriteria.mode);
     setResultView(parsedCriteria.resultView);
     setQuery(parsedCriteria.query);
+    setQueryScope(normalizeAdvancedQueryScope(parsedCriteria.queryScope));
     setIncludeTerms(parsedCriteria.includeTerms);
     setExcludeTerms(parsedCriteria.excludeTerms);
     setNetworkId(parsedCriteria.networkId);
@@ -1280,6 +1297,7 @@ export default function SearchPage() {
         : 'simple',
       resultView: criteria?.resultView === 'refined' ? 'refined' : 'classic',
       query: String(criteria?.query ?? ''),
+      queryScope: normalizeAdvancedQueryScope(criteria?.queryScope ?? 'all'),
       includeTerms: String(criteria?.includeTerms ?? ''),
       excludeTerms: String(criteria?.excludeTerms ?? ''),
       networkId: String(criteria?.networkId ?? ''),
@@ -1350,6 +1368,7 @@ export default function SearchPage() {
       } else if (normalizedCriteria.mode === 'advanced') {
         const body = {
           query: normalizedCriteria.query,
+          query_scope: normalizedCriteria.queryScope,
           include_terms: normalizedCriteria.includeTerms,
           exclude_terms: normalizedCriteria.excludeTerms,
           focus_id: normalizedCriteria.focusId,
@@ -1419,6 +1438,7 @@ export default function SearchPage() {
       mode,
       resultView,
       query,
+      queryScope,
       includeTerms,
       excludeTerms,
       networkId,
@@ -1441,6 +1461,7 @@ export default function SearchPage() {
       mode,
       resultView,
       query,
+      queryScope,
       includeTerms,
       excludeTerms,
       networkId,
@@ -1608,6 +1629,7 @@ export default function SearchPage() {
       mode,
       resultView,
       query,
+      queryScope,
       includeTerms,
       excludeTerms,
       networkId,
@@ -1654,6 +1676,7 @@ export default function SearchPage() {
       mode: normalizedMode,
       resultView,
       query,
+      queryScope,
       includeTerms,
       excludeTerms,
       networkId,
@@ -1723,6 +1746,19 @@ export default function SearchPage() {
             required={mode === 'advanced' && !String(includeTerms || '').trim() && !String(excludeTerms || '').trim()}
           />
         </div>
+        {mode === 'advanced' && (
+          <div className="form-row">
+            <label>Query field</label>
+            <select
+              value={queryScope}
+              onChange={(e) => setQueryScope(normalizeAdvancedQueryScope(e.target.value))}
+            >
+              {ADVANCED_QUERY_SCOPE_OPTIONS.map((scope) => (
+                <option key={scope.value} value={scope.value}>{scope.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="form-row">
           <label>Include words (optional)</label>
           <input

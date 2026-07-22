@@ -242,6 +242,7 @@ export async function simpleSearch(
 export async function advancedSearch(apiKey, body) {
   const params = new URLSearchParams();
   appendIfPresent(params, 'q', body?.query);
+  appendIfPresent(params, 'query_scope', body?.query_scope);
   appendIfPresent(params, 'include_terms', body?.include_terms);
   appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
   appendIfPresent(params, 'network_id', body?.network_id);
