@@ -711,7 +711,7 @@ function StatsDailyChart({ rows, chartType, showTotal, showChat, showEvents }) {
   );
 }
 
-function StatsTopNicksChart({ rows, selectedNicks, chartType }) {
+function StatsTopNicksChart({ rows, dailyRows, selectedNicks, chartType }) {
   const selectedSet = new Set((Array.isArray(selectedNicks) ? selectedNicks : []).map((nick) => String(nick || '').trim().toLowerCase()));
   const selectedRows = (Array.isArray(rows) ? rows : [])
     .filter((row) => selectedSet.has(String(row?.nick || '').trim().toLowerCase()))
@@ -725,9 +725,14 @@ function StatsTopNicksChart({ rows, selectedNicks, chartType }) {
     return <div className="empty-state">No top-nick chart data for current selection.</div>;
   }
 
+  const palette = ['#60a5fa', '#22c55e', '#f59e0b', '#a78bfa', '#f472b6', '#34d399', '#fb7185', '#93c5fd', '#14b8a6', '#f97316', '#84cc16', '#38bdf8'];
+  const colorByNick = selectedRows.reduce((acc, row, idx) => {
+    acc[row.nick] = palette[idx % palette.length];
+    return acc;
+  }, {});
+
   if (chartType === 'pie') {
     const total = selectedRows.reduce((sum, row) => sum + row.value, 0);
-    const palette = ['#60a5fa', '#22c55e', '#f59e0b', '#a78bfa', '#f472b6', '#34d399', '#fb7185', '#93c5fd'];
     const pieSlices = selectedRows.reduce((acc, row) => {
       const previousEnd = acc.length > 0 ? acc[acc.length - 1].end : -90;
       const degrees = (row.value / total) * 360;
@@ -749,9 +754,105 @@ function StatsTopNicksChart({ rows, selectedNicks, chartType }) {
         <div className="stats-chart-legend">
           {pieSlices.map((slice, idx) => (
             <div key={`nick-legend-${slice.row.nick}`} className="stats-chart-legend-row">
-              <span className="stats-color-dot" style={{ backgroundColor: palette[idx % palette.length] }} />
+              <span className="stats-color-dot" style={{ backgroundColor: colorByNick[slice.row.nick] || palette[idx % palette.length] }} />
               <span>{slice.row.nick}</span>
               <span>{compactNumber(slice.row.value)} ({((slice.row.value / total) * 100).toFixed(1)}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (chartType === 'line') {
+    const normalizedDailyRows = Array.isArray(dailyRows) ? dailyRows : [];
+    const entries = normalizedDailyRows
+      .map((row) => ({
+        log_date: String(row?.log_date || '').trim(),
+        nick: String(row?.nick || '').trim(),
+        row_count: toSafeNumber(row?.row_count),
+      }))
+      .filter((row) => row.log_date !== '' && row.nick !== '' && selectedSet.has(row.nick.toLowerCase()));
+    if (entries.length === 0) {
+      return <div className="empty-state">No per-day top-nick data available for current nick selection.</div>;
+    }
+
+    const dateKeys = Array.from(new Set(entries.map((row) => row.log_date))).sort((a, b) => a.localeCompare(b));
+    const dateIndexMap = dateKeys.reduce((acc, dateValue, idx) => {
+      acc[dateValue] = idx;
+      return acc;
+    }, {});
+    const nickSeriesMap = selectedRows.reduce((acc, row) => {
+      acc[row.nick] = Array(dateKeys.length).fill(0);
+      return acc;
+    }, {});
+    entries.forEach((row) => {
+      const idx = dateIndexMap[row.log_date];
+      if (!Number.isInteger(idx)) return;
+      if (!nickSeriesMap[row.nick]) return;
+      nickSeriesMap[row.nick][idx] = row.row_count;
+    });
+    const width = 960;
+    const height = 360;
+    const left = 48;
+    const right = 16;
+    const top = 14;
+    const bottom = 42;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    const maxValue = Math.max(1, ...Object.values(nickSeriesMap).flatMap((values) => values.map((value) => toSafeNumber(value))));
+    const yForValue = (value) => top + ((maxValue - toSafeNumber(value)) / maxValue) * plotHeight;
+    const xForIndex = (idx) => {
+      if (dateKeys.length <= 1) return left + (plotWidth / 2);
+      return left + (idx * (plotWidth / (dateKeys.length - 1)));
+    };
+    const yBottom = yForValue(0);
+    const xTickIndexes = buildAxisTickIndexes(dateKeys.length, 7);
+    const yGridTicks = [0, 0.25, 0.5, 0.75, 1];
+
+    return (
+      <div className="stats-chart-block">
+        <svg className="stats-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Top-nicks line chart over days">
+          {yGridTicks.map((ratio) => {
+            const y = top + (plotHeight * ratio);
+            return <line key={`nick-line-grid-${ratio}`} x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="#1e293b" strokeDasharray="3 4" />;
+          })}
+          <line x1={left} y1={top} x2={left} y2={yBottom} stroke="#334155" />
+          <line x1={left} y1={yBottom} x2={left + plotWidth} y2={yBottom} stroke="#334155" />
+          <text x={8} y={yForValue(maxValue) + 4} fill="#94a3b8" fontSize="11">{compactNumber(maxValue)}</text>
+          <text x={16} y={yBottom + 4} fill="#94a3b8" fontSize="11">0</text>
+
+          {selectedRows.map((row) => {
+            const values = nickSeriesMap[row.nick] || [];
+            const points = values.map((value, idx) => `${xForIndex(idx)},${yForValue(value)}`).join(' ');
+            return (
+              <polyline
+                key={`nick-line-${row.nick}`}
+                fill="none"
+                stroke={colorByNick[row.nick] || '#60a5fa'}
+                strokeWidth="2.2"
+                points={points}
+              />
+            );
+          })}
+
+          {xTickIndexes.map((idx) => {
+            const x = xForIndex(idx);
+            const label = formatDateLabel(dateKeys[idx], { includeYear: true });
+            return (
+              <g key={`nick-line-tick-${idx}`}>
+                <line x1={x} y1={yBottom} x2={x} y2={yBottom + 5} stroke="#334155" />
+                <text x={x} y={height - 10} fill="#94a3b8" fontSize="10" textAnchor="middle">{label}</text>
+              </g>
+            );
+          })}
+        </svg>
+        <div className="stats-chart-legend">
+          {selectedRows.map((row) => (
+            <div key={`line-legend-${row.nick}`} className="stats-chart-legend-row">
+              <span className="stats-color-dot" style={{ backgroundColor: colorByNick[row.nick] || '#60a5fa' }} />
+              <span>{row.nick}</span>
+              <span>{compactNumber(row.value)}</span>
             </div>
           ))}
         </div>
@@ -1875,6 +1976,13 @@ export default function SearchPage() {
                     </button>
                     <button
                       type="button"
+                      className={`btn-secondary${statsTopNickChartType === 'line' ? ' active' : ''}`}
+                      onClick={() => setStatsTopNickChartType('line')}
+                    >
+                      Line
+                    </button>
+                    <button
+                      type="button"
                       className={`btn-secondary${statsTopNickChartType === 'pie' ? ' active' : ''}`}
                       onClick={() => setStatsTopNickChartType('pie')}
                     >
@@ -1904,6 +2012,7 @@ export default function SearchPage() {
                 </div>
                 <StatsTopNicksChart
                   rows={Array.isArray(results.top_nicks) ? results.top_nicks : []}
+                  dailyRows={Array.isArray(results.daily_top_nicks) ? results.daily_top_nicks : []}
                   selectedNicks={selectedTopNicks}
                   chartType={statsTopNickChartType}
                 />

@@ -61,7 +61,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Event filtering is now interactive across search modes with clickable type toggles and quick presets, and defaults to chat-only (`PRIVMSG` + `ACTION`) so non-chat rows are hidden unless explicitly enabled.
 - Nick WHOIS requests now tolerate installs where the IRC events table does not have a `target` column.
 - Added a dedicated nick seen API integration (`/irc/api/nick-seen`) in the nick modal, showing first seen, last seen, total activity, active dates, and top event-type activity with direct viewer link.
-- Statistics charts now render richer date axes (including years) and explicit date-range labels, and now include a selectable top-nicks chart with per-nick toggles.
+- Statistics charts now render richer date axes (including years) and explicit date-range labels, and top-nicks charts now support Bar/Line/Pie with per-nick toggles.
 
 ## [2026-07-20]
 
