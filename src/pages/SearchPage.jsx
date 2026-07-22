@@ -7,6 +7,7 @@ import {
   getNetworkChannels,
   getNicknames,
   getNickWhois,
+  getNickSeen,
   getChannelDateRange,
   getReadSource,
   getPermalinkUrl,
@@ -1247,19 +1248,41 @@ export default function SearchPage() {
     });
 
     try {
-      const payload = await getNickWhois(getApiKey(), nickValue, {
+      const scope = {
         networkId: row?.network_id || networkId || '',
         channelId: row?.channel_id || channelId || '',
-      });
-      if (!payload?.success) {
-        throw new Error(payload?.error || 'No WHOIS data found.');
+      };
+      const [whoisResult, seenResult] = await Promise.allSettled([
+        getNickWhois(getApiKey(), nickValue, scope),
+        getNickSeen(getApiKey(), nickValue, scope),
+      ]);
+
+      const whoisPayload = whoisResult.status === 'fulfilled' && whoisResult.value?.success
+        ? whoisResult.value
+        : null;
+      const seenPayload = seenResult.status === 'fulfilled' && seenResult.value?.success
+        ? seenResult.value
+        : null;
+
+      if (!whoisPayload && !seenPayload) {
+        const whoisError = whoisResult.status === 'fulfilled'
+          ? String(whoisResult.value?.error || '')
+          : String(whoisResult.reason?.message || '');
+        const seenError = seenResult.status === 'fulfilled'
+          ? String(seenResult.value?.error || '')
+          : String(seenResult.reason?.message || '');
+        throw new Error(whoisError || seenError || 'No WHOIS/seen data found.');
       }
+
       setWhoisState({
         open: true,
         nick: nickValue,
         loading: false,
         error: '',
-        payload,
+        payload: {
+          whois: whoisPayload,
+          seen: seenPayload,
+        },
       });
     } catch (err) {
       setWhoisState({
@@ -1889,29 +1912,57 @@ export default function SearchPage() {
             {!whoisState.loading && whoisState.error && <div className="whois-body whois-error">{whoisState.error}</div>}
             {!whoisState.loading && !whoisState.error && (
               <div className="whois-body">
-                {!whoisState.payload?.found && <div>No WHOIS entry found for this nick in current scope.</div>}
-                {whoisState.payload?.latest_activity && (
+                {!whoisState.payload?.seen?.found && !whoisState.payload?.whois?.found && (
+                  <div>No WHOIS/seen entry found for this nick in current scope.</div>
+                )}
+                {whoisState.payload?.seen?.found && (
+                  <div className="whois-section">
+                    <div className="whois-section-title">Seen activity</div>
+                    <div><strong>First seen:</strong> {String(whoisState.payload.seen.first_seen_at || 'n/a')}</div>
+                    <div><strong>Last seen:</strong> {String(whoisState.payload.seen.last_seen_at || 'n/a')}</div>
+                    <div><strong>Total rows:</strong> {Number(whoisState.payload.seen.total_rows || 0).toLocaleString()}</div>
+                    <div><strong>Active dates:</strong> {Number(whoisState.payload.seen.unique_dates || 0).toLocaleString()}</div>
+                    {whoisState.payload.seen.viewer_url && (
+                      <div>
+                        <a href={getPermalinkUrl(whoisState.payload.seen.viewer_url)} target="_blank" rel="noopener noreferrer" className="permalink">
+                          Open in viewer ↗
+                        </a>
+                      </div>
+                    )}
+                    {Array.isArray(whoisState.payload.seen.event_type_counts) && whoisState.payload.seen.event_type_counts.length > 0 && (
+                      <div className="whois-activity-list">
+                        {whoisState.payload.seen.event_type_counts.slice(0, 8).map((row) => (
+                          <div key={`seen-type-${row.event_type}`} className="whois-activity-row">
+                            <span>{String(row.event_type || 'UNKNOWN')}</span>
+                            <span>{Number(row.row_count || 0).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {whoisState.payload?.whois?.latest_activity && (
                   <div className="whois-section">
                     <div className="whois-section-title">Latest activity</div>
-                    <div><strong>Time:</strong> {String(whoisState.payload.latest_activity.occurred_at || 'n/a')}</div>
-                    <div><strong>Type:</strong> {String(whoisState.payload.latest_activity.event_type || 'n/a')}</div>
+                    <div><strong>Time:</strong> {String(whoisState.payload.whois.latest_activity.occurred_at || 'n/a')}</div>
+                    <div><strong>Type:</strong> {String(whoisState.payload.whois.latest_activity.event_type || 'n/a')}</div>
                     <div>
                       <strong>User/host:</strong>{' '}
                       {String([
-                        whoisState.payload.latest_activity.user || '',
-                        whoisState.payload.latest_activity.host || '',
+                        whoisState.payload.whois.latest_activity.user || '',
+                        whoisState.payload.whois.latest_activity.host || '',
                       ].filter(Boolean).join('@') || 'n/a')}
                     </div>
-                    <div><strong>Channel:</strong> {String(whoisState.payload.latest_activity.channel_name || 'n/a')}</div>
+                    <div><strong>Channel:</strong> {String(whoisState.payload.whois.latest_activity.channel_name || 'n/a')}</div>
                   </div>
                 )}
-                {whoisState.payload?.whois && (
+                {whoisState.payload?.whois?.whois && (
                   <div className="whois-section">
                     <div className="whois-section-title">WHOIS metadata</div>
-                    <div><strong>Time:</strong> {String(whoisState.payload.whois.occurred_at || 'n/a')}</div>
-                    <div><strong>Type:</strong> {String(whoisState.payload.whois.event_type || 'n/a')}</div>
-                    <div><strong>to_nick:</strong> {String(whoisState.payload.whois.to_nick || 'n/a')}</div>
-                    <div className="whois-raw-line">{String(whoisState.payload.whois.raw_line || whoisState.payload.whois.event_text || whoisState.payload.whois.message_text || '')}</div>
+                    <div><strong>Time:</strong> {String(whoisState.payload.whois.whois.occurred_at || 'n/a')}</div>
+                    <div><strong>Type:</strong> {String(whoisState.payload.whois.whois.event_type || 'n/a')}</div>
+                    <div><strong>to_nick:</strong> {String(whoisState.payload.whois.whois.to_nick || 'n/a')}</div>
+                    <div className="whois-raw-line">{String(whoisState.payload.whois.whois.raw_line || whoisState.payload.whois.whois.event_text || whoisState.payload.whois.whois.message_text || '')}</div>
                   </div>
                 )}
               </div>

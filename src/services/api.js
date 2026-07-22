@@ -373,6 +373,27 @@ export async function getNickWhois(apiKey, nick, options = {}) {
   return data || {};
 }
 
+export async function getNickSeen(apiKey, nick, options = {}) {
+  const term = String(nick || '').trim();
+  if (!term) {
+    return { success: true, found: false, nick: '', total_rows: 0 };
+  }
+  const params = new URLSearchParams();
+  appendIfPresent(params, 'nick', term);
+  appendIfPresent(params, 'network_id', options?.networkId);
+  appendIfPresent(params, 'channel_id', options?.channelId);
+  appendReadSource(params);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const data = await fetchWithFallback(
+    apiKey,
+    ['/irc/api/nick-seen' + suffix],
+    {},
+    'Failed to fetch nick seen',
+    { includeAuth: false }
+  );
+  return data || {};
+}
+
 function toIsoDate(value) {
   if (!value) return '';
   const d = new Date(value);

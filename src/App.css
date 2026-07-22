@@ -831,6 +831,21 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   word-break: break-word;
 }
 
+.whois-activity-list {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.whois-activity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+
 /* Highlights */
 .highlight-form { margin-bottom: 0.5rem; }
 

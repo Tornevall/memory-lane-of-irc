@@ -60,6 +60,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Statistics now includes interactive chart rendering (Bar / Line / Pie) with user-selectable series for chat texts, channel events, and total activity per day.
 - Event filtering is now interactive across search modes with clickable type toggles and quick presets, and defaults to chat-only (`PRIVMSG` + `ACTION`) so non-chat rows are hidden unless explicitly enabled.
 - Nick WHOIS requests now tolerate installs where the IRC events table does not have a `target` column.
+- Added a dedicated nick seen API integration (`/irc/api/nick-seen`) in the nick modal, showing first seen, last seen, total activity, active dates, and top event-type activity with direct viewer link.
 
 ## [2026-07-20]
 
