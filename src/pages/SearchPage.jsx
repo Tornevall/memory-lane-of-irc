@@ -225,6 +225,9 @@ function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAn
     const params = new URLSearchParams(String(window.location.search || '').replace(/^\?/, ''));
     params.delete('q');
     params.delete('query');
+    if (databaseId) {
+      params.set('focus_id', databaseId);
+    }
     const sanitized = params.toString();
     searchPart = sanitized ? `?${sanitized}` : '';
   }
