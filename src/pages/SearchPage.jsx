@@ -5,6 +5,7 @@ import {
   getNetworks,
   getNetworkChannels,
   getNicknames,
+  getNickWhois,
   getChannelDateRange,
   getReadSource,
   getPermalinkUrl,
@@ -282,20 +283,25 @@ function extractIsoDate(value) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
-function RefinedResultRow({ result, shareSearchQueryString, includeSearchInAnchor }) {
+function RefinedResultRow({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const rawText = String(result.raw_line ?? result.message ?? '');
   const eventType = String(result.event_type ?? result.type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const eventTypeClass = `type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`;
   const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
   const occurredAtText = result.occurred_at ? new Date(result.occurred_at).toLocaleString() : '--';
+  const rowNick = String(result.nick || '').trim();
 
   return (
     <div id={rowId} className={`result-row ${hasHashMatch ? 'is-target-row' : ''}`}>
       <div className="result-meta">
         <span className={`event-type ${eventTypeClass}`}>{eventType}</span>
         {rowShortId && <a href={rowHref} className="row-anchor-id" title="Direct link to this row">#{rowShortId}</a>}
-        <span className="nick">{result.nick}</span>
+        {rowNick ? (
+          <button type="button" className="nick nick-button" onClick={() => onNickClick(rowNick, result)}>{rowNick}</button>
+        ) : (
+          <span className="nick" />
+        )}
         {result.user_host && <span className="hostmask">{result.user_host}</span>}
         <span className="channel">{result.channel}</span>
         <span className="network">{result.network}</span>
@@ -311,7 +317,7 @@ function RefinedResultRow({ result, shareSearchQueryString, includeSearchInAncho
   );
 }
 
-function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAnchor }) {
+function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
@@ -319,7 +325,6 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
   const nick = String(result.nick || '').trim();
   const channel = String(result.channel || '').trim();
   const userHost = String(result.user_host || '').trim();
-  const nickPart = nick ? `<${nick}>` : '';
   const wherePart = channel ? ` ${channel}` : '';
   const hostPart = userHost ? ` (${userHost})` : '';
   const isChannelMessage = channel.startsWith('#');
@@ -337,7 +342,11 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
         {rowShortId && <a href={rowHref} className="row-anchor-id row-anchor-id-classic" title="Direct link to this row">#{rowShortId}</a>}
         <a href={rowHref} className="classic-prefix row-anchor-time" title={occurredAtTitle}>{timeToken}</a>
         {showEventType && <span className="classic-prefix"> [{eventType}]</span>}
-        {nickPart && <span className="classic-nick"> {nickPart}</span>}
+        {nick && (
+          <button type="button" className="classic-nick classic-nick-button" onClick={() => onNickClick(nick, result)}>
+            {` <${nick}>`}
+          </button>
+        )}
         {hostPart && <span className="classic-host">{hostPart}</span>}
         {wherePart && <span className="classic-channel">{wherePart}</span>}
         {lineBody && <span className="classic-message"> {renderMircText(lineBody)}</span>}
@@ -471,6 +480,13 @@ export default function SearchPage() {
   const [includeQueryInAnchorLinks, setIncludeQueryInAnchorLinks] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [whoisState, setWhoisState] = useState({
+    open: false,
+    nick: '',
+    loading: false,
+    error: '',
+    payload: null,
+  });
   const channelsRequestSeqRef = useRef(0);
   const channelsCacheRef = useRef(new Map());
   const nickSuggestionSeqRef = useRef(0);
@@ -963,6 +979,54 @@ export default function SearchPage() {
     return output;
   }
 
+  async function handleNickWhoisClick(rawNick, row = {}) {
+    const nickValue = String(rawNick || '').trim();
+    if (!nickValue) return;
+
+    setWhoisState({
+      open: true,
+      nick: nickValue,
+      loading: true,
+      error: '',
+      payload: null,
+    });
+
+    try {
+      const payload = await getNickWhois(getApiKey(), nickValue, {
+        networkId: row?.network_id || networkId || '',
+        channelId: row?.channel_id || channelId || '',
+      });
+      if (!payload?.success) {
+        throw new Error(payload?.error || 'No WHOIS data found.');
+      }
+      setWhoisState({
+        open: true,
+        nick: nickValue,
+        loading: false,
+        error: '',
+        payload,
+      });
+    } catch (err) {
+      setWhoisState({
+        open: true,
+        nick: nickValue,
+        loading: false,
+        error: String(err?.message || 'Failed to load WHOIS.'),
+        payload: null,
+      });
+    }
+  }
+
+  function closeWhoisModal() {
+    setWhoisState({
+      open: false,
+      nick: '',
+      loading: false,
+      error: '',
+      payload: null,
+    });
+  }
+
   return (
     <div className="page">
       <h1>Search IRC Logs</h1>
@@ -1305,8 +1369,8 @@ export default function SearchPage() {
               const rowKey = String(row.id ?? row.log_event_id ?? `${row.occurred_at}-${row.nick}-${row.event_type}`);
               rendered.push(
                 resultView === 'classic'
-                  ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} />
-                  : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} />
+                ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
               );
             });
             return rendered;
@@ -1360,6 +1424,47 @@ export default function SearchPage() {
               </div>
             );
           })()}
+        </div>
+      )}
+      {whoisState.open && (
+        <div className="whois-overlay" onClick={closeWhoisModal}>
+          <div className="whois-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="whois-header">
+              <h2>WHOIS: {whoisState.nick || '?'}</h2>
+              <button type="button" className="btn-secondary" onClick={closeWhoisModal}>Close</button>
+            </div>
+            {whoisState.loading && <div className="whois-body">Loading…</div>}
+            {!whoisState.loading && whoisState.error && <div className="whois-body whois-error">{whoisState.error}</div>}
+            {!whoisState.loading && !whoisState.error && (
+              <div className="whois-body">
+                {!whoisState.payload?.found && <div>No WHOIS entry found for this nick in current scope.</div>}
+                {whoisState.payload?.latest_activity && (
+                  <div className="whois-section">
+                    <div className="whois-section-title">Latest activity</div>
+                    <div><strong>Time:</strong> {String(whoisState.payload.latest_activity.occurred_at || 'n/a')}</div>
+                    <div><strong>Type:</strong> {String(whoisState.payload.latest_activity.event_type || 'n/a')}</div>
+                    <div>
+                      <strong>User/host:</strong>{' '}
+                      {String([
+                        whoisState.payload.latest_activity.user || '',
+                        whoisState.payload.latest_activity.host || '',
+                      ].filter(Boolean).join('@') || 'n/a')}
+                    </div>
+                    <div><strong>Channel:</strong> {String(whoisState.payload.latest_activity.channel_name || 'n/a')}</div>
+                  </div>
+                )}
+                {whoisState.payload?.whois && (
+                  <div className="whois-section">
+                    <div className="whois-section-title">WHOIS metadata</div>
+                    <div><strong>Time:</strong> {String(whoisState.payload.whois.occurred_at || 'n/a')}</div>
+                    <div><strong>Type:</strong> {String(whoisState.payload.whois.event_type || 'n/a')}</div>
+                    <div><strong>to_nick:</strong> {String(whoisState.payload.whois.to_nick || 'n/a')}</div>
+                    <div className="whois-raw-line">{String(whoisState.payload.whois.raw_line || whoisState.payload.whois.event_text || whoisState.payload.whois.message_text || '')}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
