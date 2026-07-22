@@ -204,6 +204,49 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   animation: spin 0.8s linear infinite;
 }
 
+.nick-suggestion-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3d4266;
+  border-radius: 8px;
+  background: #0f1117;
+  overflow: hidden;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.nick-suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #242b44;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nick-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.nick-suggestion-item:hover {
+  background: #1a1f33;
+}
+
+.nick-suggestion-name {
+  font-weight: 600;
+}
+
+.nick-suggestion-meta {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

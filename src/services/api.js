@@ -310,6 +310,28 @@ export async function getNetworkChannels(apiKey, networkId) {
   return data || {};
 }
 
+export async function getNicknames(apiKey, searchTerm, options = {}) {
+  const term = String(searchTerm || '').trim();
+  if (!term) {
+    return { success: true, query: '', count: 0, nicknames: [] };
+  }
+  const params = new URLSearchParams();
+  appendIfPresent(params, 'q', term);
+  appendIfPresent(params, 'network_id', options?.networkId);
+  appendIfPresent(params, 'channel_id', options?.channelId);
+  appendIfPresent(params, 'limit', options?.limit || 20);
+  appendReadSource(params);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const data = await fetchWithFallback(
+    apiKey,
+    [`/irc/api/nicknames${suffix}`],
+    {},
+    'Failed to fetch nicknames',
+    { includeAuth: false }
+  );
+  return data || {};
+}
+
 function toIsoDate(value) {
   if (!value) return '';
   const d = new Date(value);

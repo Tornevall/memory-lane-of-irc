@@ -4,6 +4,7 @@ import {
   advancedSearch,
   getNetworks,
   getNetworkChannels,
+  getNicknames,
   getChannelDateRange,
   getReadSource,
   getPermalinkUrl,
@@ -434,6 +435,8 @@ export default function SearchPage() {
   const [loadingNetworks, setLoadingNetworks] = useState(false);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [nick, setNick] = useState('');
+  const [nickSuggestions, setNickSuggestions] = useState([]);
+  const [loadingNickSuggestions, setLoadingNickSuggestions] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [limit, setLimit] = useState(getInitialPageSize());
@@ -450,6 +453,7 @@ export default function SearchPage() {
   const [error, setError] = useState('');
   const channelsRequestSeqRef = useRef(0);
   const channelsCacheRef = useRef(new Map());
+  const nickSuggestionSeqRef = useRef(0);
   const readSource = getReadSource();
   const normalizedChannelFilter = String(channelFilter || '').trim().toLowerCase();
 
@@ -671,6 +675,47 @@ export default function SearchPage() {
   useEffect(() => {
     loadNetworks();
   }, []);
+
+  useEffect(() => {
+    const trimmedNick = String(nick || '').trim();
+    if (mode !== 'advanced' || trimmedNick.length < 1) {
+      setNickSuggestions([]);
+      setLoadingNickSuggestions(false);
+      return undefined;
+    }
+
+    nickSuggestionSeqRef.current += 1;
+    const seq = nickSuggestionSeqRef.current;
+    setLoadingNickSuggestions(true);
+    const timer = setTimeout(async () => {
+      try {
+        const payload = await getNicknames(getApiKey(), trimmedNick, {
+          networkId: networkId || '',
+          channelId: channelId || '',
+          limit: 25,
+        });
+        if (seq !== nickSuggestionSeqRef.current) return;
+        const suggestions = Array.isArray(payload?.nicknames)
+          ? payload.nicknames
+            .map((item) => ({
+              nick: String(item?.nick || '').trim(),
+              occurrences: Number(item?.occurrences || 0),
+            }))
+            .filter((item) => item.nick !== '')
+          : [];
+        setNickSuggestions(suggestions);
+      } catch {
+        if (seq !== nickSuggestionSeqRef.current) return;
+        setNickSuggestions([]);
+      } finally {
+        if (seq === nickSuggestionSeqRef.current) {
+          setLoadingNickSuggestions(false);
+        }
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [mode, nick, networkId, channelId]);
 
   useEffect(() => {
     setCookieValue(PAGE_SIZE_COOKIE, normalizePageSize(limit));
@@ -1064,6 +1109,25 @@ export default function SearchPage() {
                 onChange={(e) => setNick(e.target.value)}
                 placeholder="e.g. Robin"
               />
+              {loadingNickSuggestions && <small className="loading-hint"><span className="loading-spinner" />Searching nicknames...</small>}
+              {!loadingNickSuggestions && nickSuggestions.length > 0 && (
+                <div className="nick-suggestion-list" role="listbox" aria-label="Nickname suggestions">
+                  {nickSuggestions.map((item) => (
+                    <button
+                      key={`nick-suggestion-${item.nick}`}
+                      type="button"
+                      className="nick-suggestion-item"
+                      onClick={() => {
+                        setNick(item.nick);
+                        setNickSuggestions([]);
+                      }}
+                    >
+                      <span className="nick-suggestion-name">{item.nick}</span>
+                      {item.occurrences > 0 && <span className="nick-suggestion-meta">{item.occurrences}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-row">
               <label>Date From</label>
