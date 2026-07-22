@@ -215,9 +215,16 @@ function shouldAutoSearchFromCriteria(criteria) {
 function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAnchor = true) {
   const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
   const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const searchPart = includeSearchInAnchor
-    ? (shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || ''))
-    : '';
+  let searchPart = '';
+  if (includeSearchInAnchor) {
+    searchPart = shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || '');
+  } else {
+    const params = new URLSearchParams(String(window.location.search || '').replace(/^\?/, ''));
+    params.delete('q');
+    params.delete('query');
+    const sanitized = params.toString();
+    searchPart = sanitized ? `?${sanitized}` : '';
+  }
   const baseUrl = `${window.location.origin}${window.location.pathname}`;
   return {
     rowId,
@@ -1148,13 +1155,13 @@ export default function SearchPage() {
               {results.page && ` (page ${results.page})`}
             </div>
             <div className="results-controls">
-              <label className="anchor-link-toggle" title="Include current query/filter params in # anchors">
+              <label className="anchor-link-toggle" title="Include q/query search terms in # anchors">
                 <input
                   type="checkbox"
                   checked={includeQueryInAnchorLinks}
                   onChange={(e) => setIncludeQueryInAnchorLinks(Boolean(e.target.checked))}
                 />
-                <span>Include query in # links</span>
+                <span>Include q/query in # links</span>
               </label>
               <div className="view-toggle">
                 <button type="button" className={resultView === 'classic' ? 'active' : ''} onClick={() => setResultView('classic')}>Classic log view</button>
