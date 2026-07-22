@@ -214,7 +214,10 @@ function shouldAutoSearchFromCriteria(criteria) {
 
 function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAnchor = true) {
   const fallbackAnchor = `${result.occurred_at ?? ''}-${result.nick ?? ''}-${result.raw_line ?? result.message ?? ''}`.slice(0, 120);
-  const rowId = `row-${String(result.id ?? result.log_event_id ?? result.event_id ?? fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const databaseId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
+  const rowId = databaseId
+    ? databaseId.replace(/[^a-zA-Z0-9_-]/g, '-')
+    : `fallback-${String(fallbackAnchor).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   let searchPart = '';
   if (includeSearchInAnchor) {
     searchPart = shareSearchQueryString ? `?${shareSearchQueryString}` : String(window.location.search || '');
