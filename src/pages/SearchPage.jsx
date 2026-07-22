@@ -262,6 +262,14 @@ function buildRowIdentity(result, shareSearchQueryString = '', includeSearchInAn
     params.delete('q');
     params.delete('query');
   }
+  const rowNetworkId = String(result?.network_id ?? result?.networkId ?? '').trim();
+  const rowChannelId = String(result?.channel_id ?? result?.channelId ?? '').trim();
+  if (!String(params.get('network') || '').trim() && rowNetworkId) {
+    params.set('network', rowNetworkId);
+  }
+  if (!String(params.get('channel') || '').trim() && rowChannelId) {
+    params.set('channel', rowChannelId);
+  }
   if (databaseId) {
     params.set('focus_id', databaseId);
   }
