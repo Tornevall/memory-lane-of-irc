@@ -1007,6 +1007,23 @@ export default function SearchPage() {
       || `${fallbackPrefix} ${getEntityId(entity)}`;
   }
 
+  function hasLoggedActivity(entity) {
+    const candidates = [
+      entity?.activity_count,
+      entity?.event_count,
+      entity?.row_count,
+      entity?.total_rows,
+      entity?.message_count,
+      entity?.log_count,
+      entity?.entries_count,
+    ];
+
+    return candidates.some((value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed > 0;
+    });
+  }
+
   function getNetworkLabelById(id) {
     const wanted = String(id || '');
     const network = networks.find((n) => String(getEntityId(n)) === wanted);
@@ -1018,6 +1035,8 @@ export default function SearchPage() {
     const channel = channels.find((c) => String(getEntityId(c)) === wanted);
     return channel ? getEntityName(channel, 'Channel') : '';
   }
+
+  const networkOptions = (Array.isArray(networks) ? networks : []).filter((network) => hasLoggedActivity(network));
 
   const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
     const filter = String(channelFilter || '').trim().toLowerCase();
@@ -1122,7 +1141,8 @@ export default function SearchPage() {
     setNetworksReady(false);
     try {
       const payload = await getNetworks(apiKey);
-      setNetworks(extractArray(payload, 'networks'));
+      const loadedNetworks = extractArray(payload, 'networks');
+      setNetworks(loadedNetworks.filter((network) => hasLoggedActivity(network)));
       setNetworksReady(true);
     } catch (err) {
       setError(err.message || 'Failed to load networks.');
@@ -1873,7 +1893,7 @@ export default function SearchPage() {
             <option value="">
               {loadingNetworks ? 'Loading networks...' : (networksReady ? 'All networks' : 'Networks unavailable')}
             </option>
-            {networks.map((network) => (
+            {networkOptions.map((network) => (
               <option key={String(getEntityId(network))} value={String(getEntityId(network))}>
                 {getEntityName(network, 'Network')}
               </option>
