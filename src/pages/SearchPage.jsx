@@ -20,6 +20,7 @@ const EVENT_TYPE_OPTIONS = [
   'NOTICE', 'CTCP', 'INVITE', 'NOTIFY', 'WHOIS', 'NAMES', 'USERS',
   'RAW', 'ERROR', 'WALLOPS', 'SERVER', 'SQUIT', 'NETSPLIT', 'NETMERGE',
 ];
+const CHAT_EVENT_TYPES = new Set(['PRIVMSG', 'ACTION', 'NOTICE']);
 
 function getApiKey() {
   return localStorage.getItem('irc_api_key') || '';
@@ -454,6 +455,219 @@ function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = 
   );
 }
 
+function toSafeNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? 0 : n;
+}
+
+function compactNumber(value) {
+  const n = toSafeNumber(value);
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(Math.round(n));
+}
+
+function shortDateLabel(value) {
+  const raw = String(value || '');
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return raw;
+  return `${m[2]}-${m[3]}`;
+}
+
+function buildDailyRows(statsPayload) {
+  const breakdownRows = Array.isArray(statsPayload?.daily_breakdown)
+    ? statsPayload.daily_breakdown
+    : [];
+  if (breakdownRows.length > 0) {
+    return breakdownRows
+      .map((row) => ({
+        date: String(row?.log_date || '').trim(),
+        total_rows: toSafeNumber(row?.total_rows ?? row?.row_count),
+        chat_rows: toSafeNumber(row?.chat_rows),
+        channel_event_rows: toSafeNumber(row?.channel_event_rows),
+      }))
+      .filter((row) => row.date !== '');
+  }
+
+  const dailyRows = Array.isArray(statsPayload?.daily_counts) ? statsPayload.daily_counts : [];
+  if (dailyRows.length === 0) return [];
+
+  const eventTypeCounts = Array.isArray(statsPayload?.event_type_counts) ? statsPayload.event_type_counts : [];
+  const totalsByType = eventTypeCounts.reduce((acc, row) => {
+    const eventType = String(row?.event_type || '').trim().toUpperCase();
+    if (!eventType) return acc;
+    acc[eventType] = (acc[eventType] || 0) + toSafeNumber(row?.row_count);
+    return acc;
+  }, {});
+  const totalRowsByType = Object.values(totalsByType).reduce((sum, value) => sum + toSafeNumber(value), 0);
+  const chatRowsTotal = Object.entries(totalsByType).reduce((sum, [eventType, value]) => (
+    CHAT_EVENT_TYPES.has(eventType) ? sum + toSafeNumber(value) : sum
+  ), 0);
+  const chatRatio = totalRowsByType > 0 ? chatRowsTotal / totalRowsByType : 0;
+
+  return dailyRows
+    .map((row) => {
+      const totalRows = toSafeNumber(row?.row_count ?? row?.total_rows);
+      const chatRows = Math.round(totalRows * chatRatio);
+      return {
+        date: String(row?.log_date || '').trim(),
+        total_rows: totalRows,
+        chat_rows: chatRows,
+        channel_event_rows: Math.max(totalRows - chatRows, 0),
+      };
+    })
+    .filter((row) => row.date !== '');
+}
+
+function bucketDailyRows(rows, maxBuckets = 120) {
+  if (!Array.isArray(rows) || rows.length <= maxBuckets) return Array.isArray(rows) ? rows : [];
+  const bucketSize = Math.ceil(rows.length / maxBuckets);
+  const buckets = [];
+  for (let i = 0; i < rows.length; i += bucketSize) {
+    const slice = rows.slice(i, i + bucketSize);
+    if (slice.length === 0) continue;
+    const first = slice[0];
+    const last = slice[slice.length - 1];
+    buckets.push({
+      date: `${first.date}${first.date !== last.date ? `..${last.date}` : ''}`,
+      total_rows: slice.reduce((sum, row) => sum + toSafeNumber(row.total_rows), 0),
+      chat_rows: slice.reduce((sum, row) => sum + toSafeNumber(row.chat_rows), 0),
+      channel_event_rows: slice.reduce((sum, row) => sum + toSafeNumber(row.channel_event_rows), 0),
+    });
+  }
+  return buckets;
+}
+
+function pieSlicePath(cx, cy, r, startAngleDeg, endAngleDeg) {
+  const startRad = (startAngleDeg * Math.PI) / 180;
+  const endRad = (endAngleDeg * Math.PI) / 180;
+  const x1 = cx + r * Math.cos(startRad);
+  const y1 = cy + r * Math.sin(startRad);
+  const x2 = cx + r * Math.cos(endRad);
+  const y2 = cy + r * Math.sin(endRad);
+  const largeArc = endAngleDeg - startAngleDeg > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+}
+
+function StatsDailyChart({ rows, chartType, showTotal, showChat, showEvents }) {
+  const width = 960;
+  const height = 320;
+  const left = 48;
+  const right = 16;
+  const top = 14;
+  const bottom = 36;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+
+  const bucketedRows = bucketDailyRows(rows, 120);
+  const series = [
+    { key: 'total_rows', label: 'Total', color: '#60a5fa', enabled: showTotal },
+    { key: 'chat_rows', label: 'Chat texts', color: '#22c55e', enabled: showChat },
+    { key: 'channel_event_rows', label: 'Channel events', color: '#f59e0b', enabled: showEvents },
+  ].filter((item) => item.enabled);
+
+  if (bucketedRows.length === 0 || series.length === 0) {
+    return <div className="empty-state">No chart data for current selection.</div>;
+  }
+
+  if (chartType === 'pie') {
+    const pieValues = series.map((item) => ({
+      ...item,
+      value: bucketedRows.reduce((sum, row) => sum + toSafeNumber(row[item.key]), 0),
+    })).filter((item) => item.value > 0);
+    const total = pieValues.reduce((sum, item) => sum + item.value, 0);
+    if (total <= 0 || pieValues.length === 0) {
+      return <div className="empty-state">No chart data for current selection.</div>;
+    }
+    let cursor = -90;
+    return (
+      <div className="stats-chart-wrap">
+        <svg className="stats-chart" viewBox="0 0 560 320" role="img" aria-label="Pie chart for selected statistics">
+          {pieValues.map((item) => {
+            const degrees = (item.value / total) * 360;
+            const start = cursor;
+            const end = cursor + degrees;
+            cursor = end;
+            return <path key={`pie-${item.key}`} d={pieSlicePath(180, 160, 120, start, end)} fill={item.color} />;
+          })}
+        </svg>
+        <div className="stats-chart-legend">
+          {pieValues.map((item) => (
+            <div key={`legend-pie-${item.key}`} className="stats-chart-legend-row">
+              <span className="stats-color-dot" style={{ backgroundColor: item.color }} />
+              <span>{item.label}</span>
+              <span>{compactNumber(item.value)} ({((item.value / total) * 100).toFixed(1)}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(
+    1,
+    ...bucketedRows.flatMap((row) => series.map((item) => toSafeNumber(row[item.key])))
+  );
+  const bandWidth = plotWidth / Math.max(bucketedRows.length, 1);
+  const xForIndex = (index) => left + (index * bandWidth) + (bandWidth / 2);
+  const yForValue = (value) => top + ((maxValue - toSafeNumber(value)) / maxValue) * plotHeight;
+  const yTop = yForValue(maxValue);
+  const yBottom = yForValue(0);
+  const xLast = xForIndex(Math.max(bucketedRows.length - 1, 0));
+
+  return (
+    <svg className="stats-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${chartType} chart for daily activity`}>
+      <line x1={left} y1={yTop} x2={left} y2={yBottom} stroke="#334155" />
+      <line x1={left} y1={yBottom} x2={left + plotWidth} y2={yBottom} stroke="#334155" />
+      <text x={8} y={yTop + 4} fill="#94a3b8" fontSize="11">{compactNumber(maxValue)}</text>
+      <text x={16} y={yBottom + 4} fill="#94a3b8" fontSize="11">0</text>
+
+      {chartType === 'bar' && bucketedRows.map((row, idx) => {
+        const activeSeriesCount = Math.max(series.length, 1);
+        const innerPad = Math.min(2, bandWidth * 0.08);
+        const totalBarWidth = Math.max(bandWidth - (innerPad * 2), 1);
+        const singleBarWidth = Math.max(totalBarWidth / activeSeriesCount, 1);
+        return series.map((item, seriesIndex) => {
+          const value = toSafeNumber(row[item.key]);
+          const x = left + (idx * bandWidth) + innerPad + (seriesIndex * singleBarWidth);
+          const y = yForValue(value);
+          const h = Math.max(yBottom - y, 0);
+          return (
+            <rect
+              key={`bar-${idx}-${item.key}`}
+              x={x}
+              y={y}
+              width={Math.max(singleBarWidth - 1, 1)}
+              height={Math.max(h, 0)}
+              fill={item.color}
+              opacity="0.9"
+            />
+          );
+        });
+      })}
+
+      {chartType === 'line' && series.map((item) => {
+        const points = bucketedRows
+          .map((row, idx) => `${xForIndex(idx)},${yForValue(row[item.key])}`)
+          .join(' ');
+        return (
+          <polyline
+            key={`line-${item.key}`}
+            fill="none"
+            stroke={item.color}
+            strokeWidth="2.5"
+            points={points}
+          />
+        );
+      })}
+
+      <text x={left} y={height - 10} fill="#94a3b8" fontSize="11">{shortDateLabel(bucketedRows[0]?.date || '')}</text>
+      <text x={xLast} y={height - 10} fill="#94a3b8" fontSize="11" textAnchor="end">{shortDateLabel(bucketedRows[bucketedRows.length - 1]?.date || '')}</text>
+    </svg>
+  );
+}
+
 export default function SearchPage() {
   const [mode, setMode] = useState('simple');
   const [resultView, setResultView] = useState('classic');
@@ -486,6 +700,10 @@ export default function SearchPage() {
   const [includeQueryInAnchorLinks, setIncludeQueryInAnchorLinks] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [statsChartType, setStatsChartType] = useState('bar');
+  const [statsShowTotal, setStatsShowTotal] = useState(true);
+  const [statsShowChat, setStatsShowChat] = useState(true);
+  const [statsShowEvents, setStatsShowEvents] = useState(true);
   const [whoisState, setWhoisState] = useState({
     open: false,
     nick: '',
@@ -1356,7 +1574,55 @@ export default function SearchPage() {
                 <div className="stats-card"><div className="stats-label">Unique dates</div><div className="stats-value">{Number(results.unique_dates || 0).toLocaleString()}</div></div>
                 <div className="stats-card"><div className="stats-label">First seen</div><div className="stats-value">{String(results.first_occurred_at || 'n/a')}</div></div>
                 <div className="stats-card"><div className="stats-label">Last seen</div><div className="stats-value">{String(results.last_occurred_at || 'n/a')}</div></div>
+                <div className="stats-card"><div className="stats-label">Chat texts</div><div className="stats-value">{Number(results.chat_rows_total || 0).toLocaleString()}</div></div>
+                <div className="stats-card"><div className="stats-label">Channel events</div><div className="stats-value">{Number(results.channel_event_rows_total || 0).toLocaleString()}</div></div>
               </div>
+
+              {(() => {
+                const dailyRows = buildDailyRows(results);
+                return (
+                  <div className="stats-section stats-chart-section">
+                    <h3>Daily activity chart</h3>
+                    <div className="stats-chart-controls">
+                      <div className="stats-chart-type">
+                        <button
+                          type="button"
+                          className={`btn-secondary${statsChartType === 'bar' ? ' active' : ''}`}
+                          onClick={() => setStatsChartType('bar')}
+                        >
+                          Bar
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-secondary${statsChartType === 'line' ? ' active' : ''}`}
+                          onClick={() => setStatsChartType('line')}
+                        >
+                          Line
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-secondary${statsChartType === 'pie' ? ' active' : ''}`}
+                          onClick={() => setStatsChartType('pie')}
+                        >
+                          Pie
+                        </button>
+                      </div>
+                      <div className="stats-series-toggle">
+                        <label><input type="checkbox" checked={statsShowChat} onChange={(e) => setStatsShowChat(Boolean(e.target.checked))} /> Chat texts</label>
+                        <label><input type="checkbox" checked={statsShowEvents} onChange={(e) => setStatsShowEvents(Boolean(e.target.checked))} /> Channel events</label>
+                        <label><input type="checkbox" checked={statsShowTotal} onChange={(e) => setStatsShowTotal(Boolean(e.target.checked))} /> Total</label>
+                      </div>
+                    </div>
+                    <StatsDailyChart
+                      rows={dailyRows}
+                      chartType={statsChartType}
+                      showTotal={statsShowTotal}
+                      showChat={statsShowChat}
+                      showEvents={statsShowEvents}
+                    />
+                  </div>
+                );
+              })()}
 
               <div className="stats-sections">
                 <div className="stats-section">
