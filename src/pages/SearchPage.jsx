@@ -681,6 +681,7 @@ export default function SearchPage() {
   const [excludeTerms, setExcludeTerms] = useState('');
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
   const [networks, setNetworks] = useState([]);
   const [channels, setChannels] = useState([]);
   const [networksReady, setNetworksReady] = useState(false);
@@ -771,7 +772,13 @@ export default function SearchPage() {
     return channel ? getEntityName(channel, 'Channel') : '';
   }
 
-  const channelOptions = Array.isArray(channels) ? channels : [];
+  const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
+    const filter = String(channelFilter || '').trim().toLowerCase();
+    if (!filter) return true;
+    const idText = String(getEntityId(channel) || '').toLowerCase();
+    const nameText = String(getEntityName(channel, 'Channel') || '').toLowerCase();
+    return idText.includes(filter) || nameText.includes(filter);
+  });
   const channelListSize = networkId ? Math.min(Math.max(channelOptions.length + 1, 8), 18) : 1;
   const hasAllEventTypesSelected = EVENT_TYPE_OPTIONS.every((type) => eventTypes.includes(type));
 
@@ -1436,6 +1443,7 @@ export default function SearchPage() {
               const selected = e.target.value;
               setNetworkId(selected);
               setChannelId('');
+              setChannelFilter('');
               setChannels([]);
               setChannelsReady(false);
               setSimpleDateTimeFrom('');
@@ -1459,6 +1467,13 @@ export default function SearchPage() {
         </div>
         <div className="form-row">
           <label>Channel (optional)</label>
+          <input
+            type="text"
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+            placeholder={networkId ? 'Filter channels (name or id)...' : 'Select network first'}
+            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
+          />
           <select
             className="channel-selectbox"
             size={channelListSize}
@@ -1507,6 +1522,7 @@ export default function SearchPage() {
           </select>
           {networkId && loadingChannels && <small className="loading-hint"><span className="loading-spinner" />Loading channels...</small>}
           {networkId && !loadingChannels && channels.length === 0 && <small>No channels found for selected network.</small>}
+          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length === 0 && <small>No channels match your filter.</small>}
           {networkId && !loadingChannels && channels.length > 0 && channelOptions.length > 0 && (
             <small>{channelOptions.length} channels available.</small>
           )}
