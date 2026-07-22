@@ -236,10 +236,7 @@ function shouldAutoSearchFromCriteria(criteria) {
     return String(criteria.query || '').trim().length > 0 || hasTermFilters;
   }
   if (criteria.mode === 'statistics') {
-    return hasTermFilters
-      || String(criteria.query || '').trim().length > 0
-      || String(criteria.channelId || '').trim().length > 0
-      || String(criteria.networkId || '').trim().length > 0;
+    return true;
   }
   return String(criteria.query || '').trim().length > 0 || hasTermFilters || String(criteria.channelId || '').trim().length > 0;
 }
