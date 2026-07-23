@@ -77,7 +77,7 @@ function getInitialPageSize() {
 
 function normalizeChannelActivityThreshold(value) {
   const parsed = Number.parseInt(String(value || ''), 10);
-  if (Number.isFinite(parsed) && parsed >= 30) {
+  if (Number.isFinite(parsed) && parsed >= 0) {
     return parsed;
   }
   return 30;
@@ -1201,7 +1201,7 @@ export default function SearchPage() {
   const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
     const activityCount = Number(channel?.event_count ?? channel?.activity_count ?? channel?.row_count ?? channel?.total_rows ?? 0);
     const threshold = normalizeChannelActivityThreshold(channelActivityThreshold);
-    if (!Number.isFinite(activityCount) || activityCount <= threshold) {
+    if (!Number.isFinite(activityCount) || activityCount < threshold) {
       return false;
     }
     const filter = String(channelFilter || '').trim().toLowerCase();
@@ -2225,7 +2225,7 @@ export default function SearchPage() {
           <label>Channel list minimum activity</label>
           <input
             type="number"
-            min="30"
+            min="0"
             step="1"
             value={channelActivityThreshold}
             onChange={(e) => setChannelActivityThreshold(e.target.value)}
