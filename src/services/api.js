@@ -338,10 +338,8 @@ export async function getNetworkChannelDateIntervals(apiKey, networkId) {
   const data = await fetchWithFallback(
     apiKey,
     [
-      `/api/networks/${networkId}/channels/date-intervals${suffix}`,
       `/irc/api/networks/${networkId}/channels/date-intervals${suffix}`,
       `/api/irclog/networks/${networkId}/channels/date-intervals${suffix}`,
-      `/irclog/networks/${networkId}/channels/date-intervals${suffix}`,
     ],
     {},
     'Failed to fetch channel date intervals',
