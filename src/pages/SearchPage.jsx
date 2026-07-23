@@ -77,7 +77,7 @@ function getInitialPageSize() {
 
 function normalizeChannelActivityThreshold(value) {
   const parsed = Number.parseInt(String(value || ''), 10);
-  if (Number.isFinite(parsed) && parsed >= 30) {
+  if (Number.isFinite(parsed) && parsed >= 0) {
     return parsed;
   }
   return 30;
@@ -2224,11 +2224,11 @@ export default function SearchPage() {
           <label>Channel list minimum activity</label>
           <input
             type="number"
-            min="30"
+            min="0"
             step="1"
             value={channelActivityThreshold}
             onChange={(e) => setChannelActivityThreshold(normalizeChannelActivityThreshold(e.target.value))}
-            placeholder="30"
+            placeholder="0"
           />
           <small>Only channels with at least this many messages/actions are listed.</small>
         </div>
