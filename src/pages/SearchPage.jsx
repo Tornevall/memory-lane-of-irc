@@ -2243,7 +2243,7 @@ export default function SearchPage() {
           </select>
         </div>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Loading…' : (mode === 'statistics' ? 'Load statistics' : (mode === 'simple' && !String(query || '').trim() ? (String(networkId || '').trim() ? 'Open network' : 'Open channel') : 'Search'))}
+          {loading ? 'Loading…' : (mode === 'statistics' ? 'Load statistics' : (mode === 'simple' && !String(query || '').trim() ? (String(channelId || '').trim() ? 'Open channel' : (String(networkId || '').trim() ? 'Open network' : 'Open channel')) : 'Search'))}
         </button>
       </form>
 
