@@ -4,7 +4,7 @@ import {
   advancedSearch,
   getLogStatistics,
   getNetworks,
-  getNetworkChannels,
+  getNetworkChannelDateIntervals,
   getNicknames,
   getNickWhois,
   getNickSeen,
@@ -16,6 +16,7 @@ import {
 const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
 const DEFAULT_PAGE_SIZE = 500;
 const PAGE_SIZE_COOKIE = 'irclogs_page_size';
+const CHANNEL_ACTIVITY_THRESHOLD_KEY = 'irclogs_channel_activity_threshold';
 const EVENT_TYPE_OPTIONS = [
   'PRIVMSG', 'ACTION', 'JOIN', 'PART', 'QUIT', 'NICK', 'KICK', 'TOPIC', 'MODE',
   'NOTICE', 'CTCP', 'INVITE', 'NOTIFY', 'WHOIS', 'NAMES', 'USERS',
@@ -72,6 +73,21 @@ function normalizePageSize(value) {
 function getInitialPageSize() {
   const fromCookie = normalizePageSize(getCookieValue(PAGE_SIZE_COOKIE));
   return fromCookie || DEFAULT_PAGE_SIZE;
+}
+
+function normalizeChannelActivityThreshold(value) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed;
+  }
+  return 0;
+}
+
+function getInitialChannelActivityThreshold() {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  return normalizeChannelActivityThreshold(window.localStorage.getItem(CHANNEL_ACTIVITY_THRESHOLD_KEY));
 }
 
 function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
@@ -360,8 +376,10 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
   const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
   const nick = String(result.nick || '').trim();
   const channel = String(result.channel || '').trim();
+  const network = String(result.network || '').trim();
   const userHost = String(result.user_host || '').trim();
   const wherePart = channel ? ` ${channel}` : '';
+  const networkPart = network ? ` [${network}]` : '';
   const hostPart = userHost ? ` (${userHost})` : '';
   const isChannelMessage = channel.startsWith('#');
   const showEventType = !(eventType === 'PRIVMSG' && isChannelMessage);
@@ -385,6 +403,7 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
         )}
         {hostPart && <span className="classic-host">{hostPart}</span>}
         {wherePart && <span className="classic-channel">{wherePart}</span>}
+        {networkPart && <span className="classic-network">{networkPart}</span>}
         {lineBody && <span className="classic-message"> {renderMircText(lineBody)}</span>}
         {result.permalink && (
           <a href={getPermalinkUrl(result.permalink)} target="_blank" rel="noopener noreferrer" className="permalink permalink-inline">
@@ -924,6 +943,7 @@ export default function SearchPage() {
   const [networkId, setNetworkId] = useState('');
   const [channelId, setChannelId] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
+  const [channelActivityThreshold, setChannelActivityThreshold] = useState(getInitialChannelActivityThreshold());
   const [networks, setNetworks] = useState([]);
   const [channels, setChannels] = useState([]);
   const [networksReady, setNetworksReady] = useState(false);
@@ -1052,18 +1072,34 @@ export default function SearchPage() {
     return channel ? getEntityName(channel, 'Channel') : '';
   }
 
+  function getChannelById(id) {
+    const wanted = String(id || '');
+    return channels.find((channel) => String(getEntityId(channel)) === wanted) || null;
+  }
+
+  function getChannelDisplayLabel(channel) {
+    const channelName = getEntityName(channel, 'Channel');
+    const networkName = String(channel?.network_name || '').trim();
+    return networkName ? `${channelName} — ${networkName}` : channelName;
+  }
+
   const networkOptions = canFilterNetworksByActivity(networks)
     ? (Array.isArray(networks) ? networks : []).filter((network) => hasLoggedActivity(network))
     : (Array.isArray(networks) ? networks : []);
 
   const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
+    const activityCount = Number(channel?.event_count ?? channel?.activity_count ?? channel?.row_count ?? channel?.total_rows ?? 0);
+    if (!Number.isFinite(activityCount) || activityCount <= channelActivityThreshold) {
+      return false;
+    }
     const filter = String(channelFilter || '').trim().toLowerCase();
     if (!filter) return true;
     const idText = String(getEntityId(channel) || '').toLowerCase();
-    const nameText = String(getEntityName(channel, 'Channel') || '').toLowerCase();
-    return idText.includes(filter) || nameText.includes(filter);
+    const nameText = String(getChannelDisplayLabel(channel) || '').toLowerCase();
+    const networkText = String(channel?.network_name || '').toLowerCase();
+    return idText.includes(filter) || nameText.includes(filter) || networkText.includes(filter);
   });
-  const channelListSize = networkId ? Math.min(Math.max(channelOptions.length + 1, 8), 18) : 1;
+  const channelListSize = Math.min(Math.max(channelOptions.length + 1, 8), 18);
   const hasAllEventTypesSelected = EVENT_TYPE_OPTIONS.every((type) => eventTypes.includes(type));
   const availableTopNicks = Array.isArray(results?.top_nicks)
     ? results.top_nicks
@@ -1079,10 +1115,25 @@ export default function SearchPage() {
     return availableTopNicks.slice(0, 8);
   })();
 
+  useEffect(() => {
+    if (!channelsReady || !channelId) {
+      return;
+    }
+    const stillVisible = channelOptions.some((channel) => String(getEntityId(channel)) === String(channelId));
+    if (!stillVisible) {
+      setChannelId('');
+      setSimpleDateTimeFrom('');
+      setSimpleDateTimeTo('');
+      setSimpleMinDateTime('');
+      setSimpleMaxDateTime('');
+    }
+  }, [channelId, channelOptions, channelsReady]);
+
   function normalizeResultRows(payload, selectedNetworkId = networkId, selectedChannelId = channelId) {
     const rows = extractArray(payload, 'results');
-    const selectedNetworkLabel = getNetworkLabelById(selectedNetworkId);
-    const selectedChannelLabel = getChannelLabelById(selectedChannelId);
+    const selectedChannel = getChannelById(selectedChannelId);
+    const selectedNetworkLabel = getNetworkLabelById(selectedNetworkId) || String(selectedChannel?.network_name || '').trim();
+    const selectedChannelLabel = getChannelLabelById(selectedChannelId) || String(selectedChannel?.channel_name || selectedChannel?.name || '').trim();
     return rows.map((row) => ({
       ...row,
       ...(function mapIdentity(rawRow) {
@@ -1137,10 +1188,12 @@ export default function SearchPage() {
       setSimpleMaxDateTime('');
       return { from: '', to: '' };
     }
+    const selectedChannel = getChannelById(selectedChannelId);
+    const effectiveNetworkId = selectedNetworkId || selectedChannel?.network_id || selectedChannel?.networkId || '';
     const apiKey = getApiKey();
     setLoadingDateRange(true);
     try {
-      const range = await getChannelDateRange(apiKey, selectedNetworkId, selectedChannelId);
+      const range = await getChannelDateRange(apiKey, effectiveNetworkId, selectedChannelId);
       return applyDateRange(range.firstDate || '', range.lastDate || '');
     } catch {
       setSimpleDateTimeFrom('');
@@ -1175,32 +1228,82 @@ export default function SearchPage() {
     const { preserveDateRange = false } = options;
     channelsRequestSeqRef.current += 1;
     const requestSeq = channelsRequestSeqRef.current;
-    if (!selectedNetworkId) {
-      setChannels([]);
-      setChannelsReady(false);
-      setLoadingChannels(false);
-      return;
-    }
-    const cacheKey = String(selectedNetworkId);
-    const cachedChannels = channelsCacheRef.current.get(cacheKey);
-    if (cachedChannels) {
-      setChannels(cachedChannels);
-      setChannelsReady(true);
-      setLoadingChannels(false);
-      return;
-    }
     const apiKey = getApiKey();
-    setChannels([]);
-    setChannelsReady(false);
     setLoadingChannels(true);
+    setChannelsReady(false);
+
+    function mapChannelRows(rows, fallbackNetworkId) {
+      const fallbackNetworkName = String(getNetworkLabelById(fallbackNetworkId) || '').trim();
+      return (Array.isArray(rows) ? rows : []).map((channel) => {
+        const channelIdValue = channel?.id ?? channel?.channel_id ?? '';
+        const channelName = String(channel?.channel_name || channel?.name || '').trim();
+        const networkIdValue = Number.parseInt(String(channel?.network_id ?? fallbackNetworkId ?? ''), 10);
+        const networkName = String(channel?.network_name || fallbackNetworkName || '').trim();
+        return {
+          ...channel,
+          id: channelIdValue,
+          channel_name: channelName,
+          name: channelName,
+          network_id: Number.isFinite(networkIdValue) ? networkIdValue : fallbackNetworkId,
+          network_name: networkName,
+          first_date: channel?.first_date || '',
+          last_date: channel?.last_date || '',
+          event_count: Number(channel?.event_count ?? channel?.row_count ?? channel?.activity_count ?? 0) || 0,
+        };
+      });
+    }
+
     try {
-      const payload = await getNetworkChannels(apiKey, selectedNetworkId);
+      let loadedChannels = [];
+
+      if (selectedNetworkId) {
+        const cacheKey = String(selectedNetworkId);
+        const cachedChannels = channelsCacheRef.current.get(cacheKey);
+        if (cachedChannels) {
+          loadedChannels = cachedChannels;
+        } else {
+          const payload = await getNetworkChannelDateIntervals(apiKey, selectedNetworkId);
+          if (requestSeq !== channelsRequestSeqRef.current) {
+            return;
+          }
+          loadedChannels = mapChannelRows(extractArray(payload, 'channels'), selectedNetworkId);
+          channelsCacheRef.current.set(cacheKey, loadedChannels);
+        }
+      } else {
+        const sourceNetworks = Array.isArray(networkOptions) ? networkOptions : [];
+        const networkIds = sourceNetworks
+          .map((network) => String(getEntityId(network)))
+          .filter((id) => id !== '');
+        const channelGroups = await Promise.all(networkIds.map(async (networkIdValue) => {
+          const cacheKey = String(networkIdValue);
+          const cachedChannels = channelsCacheRef.current.get(cacheKey);
+          if (cachedChannels) {
+            return cachedChannels;
+          }
+          const payload = await getNetworkChannelDateIntervals(apiKey, networkIdValue);
+          if (requestSeq !== channelsRequestSeqRef.current) {
+            return [];
+          }
+          const rows = mapChannelRows(extractArray(payload, 'channels'), networkIdValue);
+          channelsCacheRef.current.set(cacheKey, rows);
+          return rows;
+        }));
+        loadedChannels = channelGroups.flat();
+      }
+
       if (requestSeq !== channelsRequestSeqRef.current) {
         return;
       }
-      const loadedChannels = extractArray(payload, 'channels');
-      channelsCacheRef.current.set(cacheKey, loadedChannels);
-      setChannels(loadedChannels);
+
+      const nextChannels = loadedChannels
+        .slice()
+        .sort((a, b) => {
+          const networkDiff = String(a.network_name || '').localeCompare(String(b.network_name || ''), undefined, { sensitivity: 'base' });
+          if (networkDiff !== 0) return networkDiff;
+          return String(a.channel_name || '').localeCompare(String(b.channel_name || ''), undefined, { sensitivity: 'base' });
+        });
+
+      setChannels(nextChannels);
       setChannelsReady(true);
       if (!preserveDateRange) {
         setSimpleDateTimeFrom('');
@@ -1243,8 +1346,9 @@ export default function SearchPage() {
     setLoadingNickSuggestions(true);
     const timer = setTimeout(async () => {
       try {
+        const selectedChannel = getChannelById(channelId);
         const payload = await getNicknames(getApiKey(), trimmedNick, {
-          networkId: networkId || '',
+          networkId: networkId || selectedChannel?.network_id || '',
           channelId: channelId || '',
           limit: 25,
         });
@@ -1274,6 +1378,13 @@ export default function SearchPage() {
   useEffect(() => {
     setCookieValue(PAGE_SIZE_COOKIE, normalizePageSize(limit));
   }, [limit]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(CHANNEL_ACTIVITY_THRESHOLD_KEY, String(normalizeChannelActivityThreshold(channelActivityThreshold)));
+  }, [channelActivityThreshold]);
 
   useEffect(() => {
     const parsedCriteria = parseCriteriaFromLocation(window.location.search || '');
@@ -1316,6 +1427,23 @@ export default function SearchPage() {
   }, []);
 
   useEffect(() => {
+    if (!networksReady) {
+      return;
+    }
+    loadChannels(networkId, { preserveDateRange: true });
+  }, [networksReady]);
+
+  useEffect(() => {
+    if (!channelsReady || mode !== 'simple' || !channelId) {
+      return;
+    }
+    if (String(simpleDateTimeFrom || '').trim() || String(simpleDateTimeTo || '').trim()) {
+      return;
+    }
+    loadDateRange(networkId, channelId);
+  }, [channelsReady, channelId, mode, simpleDateTimeFrom, simpleDateTimeTo, networkId]);
+
+  useEffect(() => {
     const hash = String(window.location.hash || '');
     if (!hash || !results?.results?.length) return;
     const target = document.getElementById(hash.slice(1));
@@ -1350,6 +1478,8 @@ export default function SearchPage() {
       limit: Number(criteria?.limit ?? DEFAULT_PAGE_SIZE),
       page: Number(criteria?.page ?? 1),
     };
+    const selectedChannel = getChannelById(normalizedCriteria.channelId);
+    const effectiveNetworkId = normalizedCriteria.networkId || String(selectedChannel?.network_id || '');
     const shareQueryString = buildSearchParamsFromCriteria(normalizedCriteria);
     setLastSearchQueryString(shareQueryString);
     if (updateUrl) {
@@ -1384,7 +1514,7 @@ export default function SearchPage() {
           apiKey,
           trimmedQuery,
           normalizedCriteria.channelId,
-          normalizedCriteria.networkId,
+          effectiveNetworkId,
           effectiveFrom,
           effectiveTo,
           normalizePageSize(normalizedCriteria.limit),
@@ -1397,7 +1527,7 @@ export default function SearchPage() {
         const nextResults = {
           ...data,
           view_mode: normalizedCriteria.mode,
-          results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
+          results: normalizeResultRows(data, effectiveNetworkId, normalizedCriteria.channelId),
         };
         if (requestSeq !== searchRequestSeqRef.current) return;
         setResults(nextResults);
@@ -1413,7 +1543,7 @@ export default function SearchPage() {
           limit: normalizePageSize(normalizedCriteria.limit),
           page: Number.isFinite(normalizedCriteria.page) && normalizedCriteria.page >= 1 ? normalizedCriteria.page : 1,
         };
-        if (normalizedCriteria.networkId) body.network_id = Number(normalizedCriteria.networkId);
+        if (effectiveNetworkId) body.network_id = Number(effectiveNetworkId);
         if (normalizedCriteria.channelId) body.channel_id = Number(normalizedCriteria.channelId);
         if (normalizedCriteria.nick) body.nick = normalizedCriteria.nick;
         if (normalizedCriteria.dateFrom) body.date_from = normalizedCriteria.dateFrom;
@@ -1423,7 +1553,7 @@ export default function SearchPage() {
         const nextResults = {
           ...data,
           view_mode: normalizedCriteria.mode,
-          results: normalizeResultRows(data, normalizedCriteria.networkId, normalizedCriteria.channelId),
+          results: normalizeResultRows(data, effectiveNetworkId, normalizedCriteria.channelId),
         };
         if (requestSeq !== searchRequestSeqRef.current) return;
         setResults(nextResults);
@@ -1444,7 +1574,7 @@ export default function SearchPage() {
           query: normalizedCriteria.query,
           include_terms: normalizedCriteria.includeTerms,
           exclude_terms: normalizedCriteria.excludeTerms,
-          network_id: normalizedCriteria.networkId || '',
+          network_id: effectiveNetworkId || '',
           channel_id: normalizedCriteria.channelId || '',
           event_types: normalizedCriteria.eventTypes.length > 0 ? normalizedCriteria.eventTypes.join(',') : '',
           datetime_from: effectiveFrom,
@@ -1564,8 +1694,9 @@ export default function SearchPage() {
     });
 
     try {
+      const inferredChannel = getChannelById(row?.channel_id || channelId || '');
       const scope = {
-        networkId: row?.network_id || networkId || '',
+        networkId: row?.network_id || inferredChannel?.network_id || networkId || '',
         channelId: row?.channel_id || channelId || '',
       };
       const [whoisResult, seenResult] = await Promise.allSettled([
@@ -1920,13 +2051,25 @@ export default function SearchPage() {
           {loadingNetworks && <small className="loading-hint"><span className="loading-spinner" />Loading networks...</small>}
         </div>
         <div className="form-row">
+          <label>Channel list minimum activity</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={channelActivityThreshold}
+            onChange={(e) => setChannelActivityThreshold(normalizeChannelActivityThreshold(e.target.value))}
+            placeholder="0"
+          />
+          <small>Only channels with more than this many messages/actions are listed.</small>
+        </div>
+        <div className="form-row">
           <label>Channel (optional)</label>
           <input
             type="text"
             value={channelFilter}
             onChange={(e) => setChannelFilter(e.target.value)}
-            placeholder={networkId ? 'Filter channels (name or id)...' : 'Select network first'}
-            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
+            placeholder={networkId ? 'Filter channels (name or id)...' : 'Filter channels (name, id or network)...'}
+            disabled={loadingNetworks || !networksReady || loadingChannels || !channelsReady}
           />
           <select
             className="channel-selectbox"
@@ -1961,24 +2104,24 @@ export default function SearchPage() {
                 });
               }
             }}
-            disabled={loadingNetworks || !networksReady || !networkId || loadingChannels || !channelsReady}
+            disabled={loadingNetworks || !networksReady || loadingChannels || !channelsReady}
           >
             <option value="">
               {loadingChannels
                 ? 'Loading channels...'
-                : (networkId ? (channelsReady ? 'All channels in selected network' : 'Loading channels...') : 'Select network first')}
+                : (networkId ? (channelsReady ? 'All channels in selected network' : 'Loading channels...') : 'All channels across all networks')}
             </option>
             {channelOptions.map((channel) => (
               <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
-                {getEntityName(channel, 'Channel')}
+                {getChannelDisplayLabel(channel)}
               </option>
             ))}
           </select>
           {networkId && loadingChannels && <small className="loading-hint"><span className="loading-spinner" />Loading channels...</small>}
-          {networkId && !loadingChannels && channels.length === 0 && <small>No channels found for selected network.</small>}
-          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length === 0 && <small>No channels match your filter.</small>}
-          {networkId && !loadingChannels && channels.length > 0 && channelOptions.length > 0 && (
-            <small>{channelOptions.length} channels available.</small>
+          {!loadingChannels && channels.length === 0 && <small>No channels found.</small>}
+          {!loadingChannels && channels.length > 0 && channelOptions.length === 0 && <small>No channels match your filter or activity threshold.</small>}
+          {!loadingChannels && channels.length > 0 && channelOptions.length > 0 && (
+            <small>{channelOptions.length} channels available{networkId ? ' in selected network' : ' across all networks'}.</small>
           )}
           {!loadingChannels && channelId && (
             <small>Reading from: {readSource}</small>

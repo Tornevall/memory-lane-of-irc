@@ -331,6 +331,25 @@ export async function getNetworkChannels(apiKey, networkId) {
   return data || {};
 }
 
+export async function getNetworkChannelDateIntervals(apiKey, networkId) {
+  const params = new URLSearchParams();
+  appendReadSource(params);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const data = await fetchWithFallback(
+    apiKey,
+    [
+      `/api/networks/${networkId}/channels/date-intervals${suffix}`,
+      `/irc/api/networks/${networkId}/channels/date-intervals${suffix}`,
+      `/api/irclog/networks/${networkId}/channels/date-intervals${suffix}`,
+      `/irclog/networks/${networkId}/channels/date-intervals${suffix}`,
+    ],
+    {},
+    'Failed to fetch channel date intervals',
+    { includeAuth: false }
+  );
+  return data || {};
+}
+
 export async function getNicknames(apiKey, searchTerm, options = {}) {
   const term = String(searchTerm || '').trim();
   if (!term) {
