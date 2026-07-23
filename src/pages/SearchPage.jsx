@@ -85,10 +85,10 @@ function normalizeChannelActivityThreshold(value) {
 
 function getInitialChannelActivityThreshold() {
   if (typeof window === 'undefined') {
-    return 30;
+    return '30';
   }
   const saved = normalizeChannelActivityThreshold(window.localStorage.getItem(CHANNEL_ACTIVITY_THRESHOLD_KEY));
-  return saved;
+  return String(saved);
 }
 
 function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
@@ -1200,7 +1200,8 @@ export default function SearchPage() {
 
   const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
     const activityCount = Number(channel?.event_count ?? channel?.activity_count ?? channel?.row_count ?? channel?.total_rows ?? 0);
-    if (!Number.isFinite(activityCount) || activityCount <= channelActivityThreshold) {
+    const threshold = normalizeChannelActivityThreshold(channelActivityThreshold);
+    if (!Number.isFinite(activityCount) || activityCount <= threshold) {
       return false;
     }
     const filter = String(channelFilter || '').trim().toLowerCase();
@@ -2227,7 +2228,8 @@ export default function SearchPage() {
             min="30"
             step="1"
             value={channelActivityThreshold}
-            onChange={(e) => setChannelActivityThreshold(normalizeChannelActivityThreshold(e.target.value))}
+            onChange={(e) => setChannelActivityThreshold(e.target.value)}
+            onBlur={(e) => setChannelActivityThreshold(String(normalizeChannelActivityThreshold(e.target.value)))}
             placeholder="30"
           />
           <small>Only channels with at least this many messages/actions are listed.</small>
