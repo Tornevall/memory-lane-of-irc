@@ -1497,8 +1497,8 @@ export default function SearchPage() {
         const trimmedQuery = String(normalizedCriteria.query || '').trim();
         const trimmedIncludeTerms = String(normalizedCriteria.includeTerms || '').trim();
         const trimmedExcludeTerms = String(normalizedCriteria.excludeTerms || '').trim();
-        if (!trimmedQuery && !trimmedIncludeTerms && !trimmedExcludeTerms && !normalizedCriteria.channelId) {
-          throw new Error('Choose a channel to open chat logs directly, or enter a query.');
+        if (!trimmedQuery && !trimmedIncludeTerms && !trimmedExcludeTerms && !normalizedCriteria.channelId && !normalizedCriteria.networkId) {
+          throw new Error('Choose a channel or network to open chat logs directly, or enter a query.');
         }
         const effectiveFrom = normalizedCriteria.simpleDateTimeFrom
           && normalizedCriteria.simpleDateTimeTo
@@ -2243,7 +2243,7 @@ export default function SearchPage() {
           </select>
         </div>
         <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? 'Loading…' : (mode === 'statistics' ? 'Load statistics' : (mode === 'simple' && !String(query || '').trim() ? 'Open channel' : 'Search'))}
+          {loading ? 'Loading…' : (mode === 'statistics' ? 'Load statistics' : (mode === 'simple' && !String(query || '').trim() ? (String(networkId || '').trim() ? 'Open network' : 'Open channel') : 'Search'))}
         </button>
       </form>
 
