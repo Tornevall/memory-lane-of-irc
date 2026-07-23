@@ -85,9 +85,10 @@ function normalizeChannelActivityThreshold(value) {
 
 function getInitialChannelActivityThreshold() {
   if (typeof window === 'undefined') {
-    return 0;
+    return 50;
   }
-  return normalizeChannelActivityThreshold(window.localStorage.getItem(CHANNEL_ACTIVITY_THRESHOLD_KEY));
+  const saved = normalizeChannelActivityThreshold(window.localStorage.getItem(CHANNEL_ACTIVITY_THRESHOLD_KEY));
+  return saved > 0 ? saved : 50;
 }
 
 function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
