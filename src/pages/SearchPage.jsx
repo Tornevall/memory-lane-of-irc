@@ -77,18 +77,18 @@ function getInitialPageSize() {
 
 function normalizeChannelActivityThreshold(value) {
   const parsed = Number.parseInt(String(value || ''), 10);
-  if (Number.isFinite(parsed) && parsed >= 0) {
+  if (Number.isFinite(parsed) && parsed >= 30) {
     return parsed;
   }
-  return 0;
+  return 30;
 }
 
 function getInitialChannelActivityThreshold() {
   if (typeof window === 'undefined') {
-    return 50;
+    return 30;
   }
   const saved = normalizeChannelActivityThreshold(window.localStorage.getItem(CHANNEL_ACTIVITY_THRESHOLD_KEY));
-  return saved > 0 ? saved : 50;
+  return saved;
 }
 
 function toLocalDateTimeValue(value, endOfDayForDateOnly = false) {
@@ -2226,13 +2226,13 @@ export default function SearchPage() {
           <label>Channel list minimum activity</label>
           <input
             type="number"
-            min="0"
+            min="30"
             step="1"
             value={channelActivityThreshold}
             onChange={(e) => setChannelActivityThreshold(normalizeChannelActivityThreshold(e.target.value))}
-            placeholder="0"
+            placeholder="30"
           />
-          <small>Only channels with more than this many messages/actions are listed.</small>
+          <small>Only channels with at least this many messages/actions are listed.</small>
         </div>
         <div className="form-row">
           <label>Channel (optional)</label>
