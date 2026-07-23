@@ -459,7 +459,7 @@ function normalizeDateInput(value, minDate = '', maxDate = '') {
   return iso;
 }
 
-function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = false, placeholder = 'yyyy-mm-dd' }) {
+function DateSelector({ value, onChange, onCommit, minDate = '', maxDate = '', disabled = false, placeholder = 'yyyy-mm-dd' }) {
   const hiddenDateRef = useRef(null);
   const normalized = normalizeDateInput(value, minDate, maxDate);
   const pickerValue = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
@@ -481,7 +481,13 @@ function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = 
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={() => onChange(normalizeDateInput(value, minDate, maxDate))}
+        onBlur={() => {
+          const nextValue = normalizeDateInput(value, minDate, maxDate);
+          onChange(nextValue);
+          if (typeof onCommit === 'function') {
+            onCommit(nextValue);
+          }
+        }}
         placeholder={placeholder}
         disabled={disabled}
       />
@@ -496,10 +502,30 @@ function DateSelector({ value, onChange, minDate = '', maxDate = '', disabled = 
         max={maxDate || undefined}
         tabIndex={-1}
         className="date-native-input"
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          onChange(nextValue);
+          if (typeof onCommit === 'function') {
+            onCommit(nextValue);
+          }
+        }}
       />
     </div>
   );
+}
+
+function normalizeMiniStats(payload) {
+  if (!payload) return null;
+  const topNicks = Array.isArray(payload.top_nicks) ? payload.top_nicks : [];
+  return {
+    totalRows: toSafeNumber(payload.total_rows),
+    uniqueNicks: toSafeNumber(payload.unique_nicks ?? topNicks.length),
+    uniqueDates: toSafeNumber(payload.unique_dates),
+    firstSeen: String(payload.first_occurred_at || payload.first_seen_at || '').trim(),
+    lastSeen: String(payload.last_occurred_at || payload.last_seen_at || '').trim(),
+    chatRowsTotal: toSafeNumber(payload.chat_rows_total),
+    channelEventRowsTotal: toSafeNumber(payload.channel_event_rows_total),
+  };
 }
 
 function toSafeNumber(value) {
@@ -964,6 +990,7 @@ export default function SearchPage() {
   const [simpleMaxDateTime, setSimpleMaxDateTime] = useState('');
   const [loadingDateRange, setLoadingDateRange] = useState(false);
   const [results, setResults] = useState(null);
+  const [searchSummary, setSearchSummary] = useState(null);
   const [lastSearchQueryString, setLastSearchQueryString] = useState('');
   const [includeQueryInAnchorLinks, setIncludeQueryInAnchorLinks] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1482,6 +1509,7 @@ export default function SearchPage() {
     const effectiveNetworkId = normalizedCriteria.networkId || String(selectedChannel?.network_id || '');
     const shareQueryString = buildSearchParamsFromCriteria(normalizedCriteria);
     setLastSearchQueryString(shareQueryString);
+    setSearchSummary(null);
     if (updateUrl) {
       const searchPart = shareQueryString ? `?${shareQueryString}` : '';
       const currentHash = String(window.location.hash || '');
@@ -1492,11 +1520,41 @@ export default function SearchPage() {
     setError('');
     setResults(null);
     try {
+      const trimmedQuery = String(normalizedCriteria.query || '').trim();
+      const trimmedIncludeTerms = String(normalizedCriteria.includeTerms || '').trim();
+      const trimmedExcludeTerms = String(normalizedCriteria.excludeTerms || '').trim();
+      const shouldLoadMiniStats = normalizedCriteria.mode === 'simple'
+        && (normalizedCriteria.networkId || normalizedCriteria.channelId || trimmedQuery || trimmedIncludeTerms || trimmedExcludeTerms);
+      let miniStatsResolved = false;
+      let miniStatsPayload = null;
+      const applyMiniStats = (payload) => {
+        if (requestSeq !== searchRequestSeqRef.current) return;
+        const normalizedSummary = normalizeMiniStats(payload);
+        if (!normalizedSummary) return;
+        miniStatsPayload = normalizedSummary;
+        miniStatsResolved = true;
+        if (searchSucceeded) {
+          setSearchSummary(normalizedSummary);
+        }
+      };
+      let searchSucceeded = false;
+      const miniStatsPromise = shouldLoadMiniStats
+        ? getLogStatistics(apiKey, {
+          query: normalizedCriteria.query,
+          include_terms: normalizedCriteria.includeTerms,
+          exclude_terms: normalizedCriteria.excludeTerms,
+          network_id: effectiveNetworkId || '',
+          channel_id: normalizedCriteria.channelId || '',
+          event_types: normalizedCriteria.eventTypes.length > 0 ? normalizedCriteria.eventTypes.join(',') : '',
+          datetime_from: normalizedCriteria.simpleDateTimeFrom,
+          datetime_to: normalizedCriteria.simpleDateTimeTo,
+          date_from: normalizedCriteria.simpleDateTimeFrom ? normalizedCriteria.simpleDateTimeFrom.slice(0, 10) : '',
+          date_to: normalizedCriteria.simpleDateTimeTo ? normalizedCriteria.simpleDateTimeTo.slice(0, 10) : '',
+        }).then(applyMiniStats).catch(() => null)
+        : Promise.resolve(null);
+
       let data;
       if (normalizedCriteria.mode === 'simple') {
-        const trimmedQuery = String(normalizedCriteria.query || '').trim();
-        const trimmedIncludeTerms = String(normalizedCriteria.includeTerms || '').trim();
-        const trimmedExcludeTerms = String(normalizedCriteria.excludeTerms || '').trim();
         if (!trimmedQuery && !trimmedIncludeTerms && !trimmedExcludeTerms && !normalizedCriteria.channelId && !normalizedCriteria.networkId) {
           throw new Error('Choose a channel or network to open chat logs directly, or enter a query.');
         }
@@ -1529,6 +1587,10 @@ export default function SearchPage() {
           view_mode: normalizedCriteria.mode,
           results: normalizeResultRows(data, effectiveNetworkId, normalizedCriteria.channelId),
         };
+        searchSucceeded = true;
+        if (requestSeq === searchRequestSeqRef.current && miniStatsResolved && miniStatsPayload) {
+          setSearchSummary(miniStatsPayload);
+        }
         if (requestSeq !== searchRequestSeqRef.current) return;
         setResults(nextResults);
         lastLogCriteriaRef.current = { ...normalizedCriteria };
@@ -1589,9 +1651,11 @@ export default function SearchPage() {
         if (requestSeq !== searchRequestSeqRef.current) return;
         setResults(nextResults);
       }
+      await miniStatsPromise;
     } catch (err) {
       if (requestSeq !== searchRequestSeqRef.current) return;
       setError(err.message);
+      setSearchSummary(null);
     } finally {
       if (requestSeq !== searchRequestSeqRef.current) return;
       setLoading(false);
@@ -1645,6 +1709,21 @@ export default function SearchPage() {
     });
   }
 
+  async function handleSimpleDateCommit(nextFrom, nextTo) {
+    if (mode !== 'simple') return;
+    if (!hasInteractiveSearchContext({ simpleDateTimeFrom: nextFrom, simpleDateTimeTo: nextTo })) {
+      return;
+    }
+
+    const firstPage = 1;
+    setPage(firstPage);
+    await executeCurrentSearch({
+      simpleDateTimeFrom: nextFrom,
+      simpleDateTimeTo: nextTo,
+      page: firstPage,
+    });
+  }
+
   async function handleSimpleDateReset() {
     if (!channelId) {
       setSimpleDateTimeFrom('');
@@ -1654,7 +1733,16 @@ export default function SearchPage() {
       return;
     }
 
-    await loadDateRange(networkId, channelId);
+    const nextRange = await loadDateRange(networkId, channelId);
+    if (hasInteractiveSearchContext({ simpleDateTimeFrom: nextRange.from, simpleDateTimeTo: nextRange.to })) {
+      const firstPage = 1;
+      setPage(firstPage);
+      await executeCurrentSearch({
+        simpleDateTimeFrom: nextRange.from,
+        simpleDateTimeTo: nextRange.to,
+        page: firstPage,
+      });
+    }
   }
 
   function buildPaginationPages(currentPage, maxPage) {
@@ -2133,7 +2221,11 @@ export default function SearchPage() {
             <input
               type="datetime-local"
               value={simpleDateTimeFrom}
-              onChange={(e) => setSimpleDateTimeFrom(e.target.value)}
+              onChange={async (e) => {
+                const nextValue = e.target.value;
+                setSimpleDateTimeFrom(nextValue);
+                await handleSimpleDateCommit(nextValue, simpleDateTimeTo);
+              }}
               min={simpleMinDateTime || undefined}
               max={simpleMaxDateTime || undefined}
               disabled={!channelId || loadingDateRange}
@@ -2141,7 +2233,11 @@ export default function SearchPage() {
             <input
               type="datetime-local"
               value={simpleDateTimeTo}
-              onChange={(e) => setSimpleDateTimeTo(e.target.value)}
+              onChange={async (e) => {
+                const nextValue = e.target.value;
+                setSimpleDateTimeTo(nextValue);
+                await handleSimpleDateCommit(simpleDateTimeFrom, nextValue);
+              }}
               min={simpleMinDateTime || undefined}
               max={simpleMaxDateTime || undefined}
               disabled={!channelId || loadingDateRange}
@@ -2248,6 +2344,22 @@ export default function SearchPage() {
       </form>
 
       {error && <div className="error-banner">{error}</div>}
+
+      {searchSummary && (!results || results.view_mode !== 'statistics') && (
+        <div className="stats-panel">
+          <div className="stats-grid">
+            <div className="stats-card"><div className="stats-label">Posts</div><div className="stats-value">{Number(searchSummary.totalRows || 0).toLocaleString()}</div></div>
+            <div className="stats-card"><div className="stats-label">Nicks</div><div className="stats-value">{Number(searchSummary.uniqueNicks || 0).toLocaleString()}</div></div>
+            <div className="stats-card"><div className="stats-label">Dates</div><div className="stats-value">{Number(searchSummary.uniqueDates || 0).toLocaleString()}</div></div>
+            <div className="stats-card"><div className="stats-label">Chat texts</div><div className="stats-value">{Number(searchSummary.chatRowsTotal || 0).toLocaleString()}</div></div>
+            <div className="stats-card"><div className="stats-label">Channel events</div><div className="stats-value">{Number(searchSummary.channelEventRowsTotal || 0).toLocaleString()}</div></div>
+            <div className="stats-card"><div className="stats-label">Loaded</div><div className="stats-value">{loading ? '…' : 'Ready'}</div></div>
+          </div>
+          {(searchSummary.firstSeen || searchSummary.lastSeen) && (
+            <small>{searchSummary.firstSeen || 'n/a'} → {searchSummary.lastSeen || 'n/a'}</small>
+          )}
+        </div>
+      )}
 
       {results && (
         <div className="results">
