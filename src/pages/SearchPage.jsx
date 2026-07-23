@@ -416,6 +416,89 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
   );
 }
 
+function getBulkPreviewLines(result) {
+  const raw = String(result.message_text ?? result.raw_line ?? '').trim();
+  if (!raw) return [];
+  const summaryPart = raw.includes('—') ? raw.split('—').slice(1).join('—').trim() : raw;
+  return summaryPart
+    .split(' | ')
+    .map((line) => String(line || '').trim())
+    .filter((line) => line !== '');
+}
+
+function BulkEventCard({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick, variant = 'refined' }) {
+  const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
+  const eventType = String(result.event_type ?? 'MODE_BULK').trim().toUpperCase() || 'MODE_BULK';
+  const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
+  const network = String(result.network || '').trim();
+  const channel = String(result.channel || '').trim();
+  const nick = String(result.nick || '[server]').trim();
+  const previewLines = getBulkPreviewLines(result);
+  const bulkCount = Number(result.bulk_event_count ?? result.bulk_count ?? previewLines.length ?? 0) || 0;
+  const summaryText = String(result.message_text || '').trim();
+  const countLabel = bulkCount > 0 ? `${bulkCount} changes` : 'Bulk changes';
+
+  if (variant === 'classic') {
+    return (
+      <div id={rowId} className={`classic-row classic-row--bulk ${hasHashMatch ? 'is-target-row' : ''}`}>
+        <div className="classic-main classic-main--bulk">
+          <a href={rowHref} className="row-anchor-id row-anchor-id-classic" title="Direct link to this row">#{rowShortId}</a>
+          <span className="classic-prefix">[{eventType}]</span>
+          <button type="button" className="classic-nick classic-nick-button" onClick={() => onNickClick(nick, result)}>
+            {` <${nick}>`}
+          </button>
+          {channel && <span className="classic-channel"> {channel}</span>}
+          {network && <span className="classic-network"> [{network}]</span>}
+        </div>
+        <div className="bulk-card">
+          <div className="bulk-card-summary">
+            <span className="bulk-card-count">{countLabel}</span>
+            <span className="bulk-card-text">{summaryText || 'Bulk event'}</span>
+          </div>
+          {previewLines.length > 0 && (
+            <div className="bulk-card-preview">
+              {previewLines.map((line, index) => (
+                <div key={`${rowId}-bulk-${index}`} className="bulk-card-line">{line}</div>
+              ))}
+            </div>
+          )}
+          {rowHref && (
+            <a href={rowHref} className="bulk-card-link" title="Direct link to this row">Open row</a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div id={rowId} className={`result-row result-row--bulk ${hasHashMatch ? 'is-target-row' : ''}`}>
+      <div className="result-meta bulk-meta">
+        <span className={`event-type ${`type-${eventType.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}`}`}>{eventType}</span>
+        {rowShortId && <a href={rowHref} className="row-anchor-id" title="Direct link to this row">#{rowShortId}</a>}
+        <span className="nick"> &lt;{nick}&gt;</span>
+        {channel && <span className="channel">{channel}</span>}
+        {network && <span className="network">[{network}]</span>}
+        <span className="bulk-count-pill">{countLabel}</span>
+      </div>
+      <div className="bulk-card">
+        <div className="bulk-card-summary">
+          <span className="bulk-card-text">{summaryText || 'Bulk event'}</span>
+        </div>
+        {previewLines.length > 0 && (
+          <div className="bulk-card-preview">
+            {previewLines.map((line, index) => (
+              <div key={`${rowId}-bulk-${index}`} className="bulk-card-line">{line}</div>
+            ))}
+          </div>
+        )}
+        {rowHref && (
+          <a href={rowHref} className="bulk-card-link" title="Direct link to this row">Open row</a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function normalizeDateInput(value, minDate = '', maxDate = '') {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -2598,9 +2681,11 @@ export default function SearchPage() {
               }
               const rowKey = String(row.id ?? row.log_event_id ?? `${row.occurred_at}-${row.nick}-${row.event_type}`);
               rendered.push(
-                resultView === 'classic'
-                ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
-                : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                String(row.event_type || '').toUpperCase() === 'MODE_BULK'
+                  ? <BulkEventCard key={rowKey} result={row} variant={resultView} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                  : (resultView === 'classic'
+                    ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                    : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />)
               );
             });
             return rendered;
