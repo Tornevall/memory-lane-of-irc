@@ -1077,10 +1077,10 @@ export default function SearchPage() {
     return channels.find((channel) => String(getEntityId(channel)) === wanted) || null;
   }
 
-  function getChannelDisplayLabel(channel) {
+  function getChannelDisplayLabel(channel, includeNetwork = !String(networkId || '').trim()) {
     const channelName = getEntityName(channel, 'Channel');
     const networkName = String(channel?.network_name || '').trim();
-    return networkName ? `${channelName} — ${networkName}` : channelName;
+    return includeNetwork && networkName ? `${channelName} — ${networkName}` : channelName;
   }
 
   const networkOptions = canFilterNetworksByActivity(networks)
@@ -2113,7 +2113,7 @@ export default function SearchPage() {
             </option>
             {channelOptions.map((channel) => (
               <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
-                {getChannelDisplayLabel(channel)}
+                {getChannelDisplayLabel(channel, !networkId)}
               </option>
             ))}
           </select>
