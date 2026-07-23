@@ -24,6 +24,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Cleaned up MODE_BULK cards so the summary header and individual mode-change lines render separately instead of showing a pipe-separated blob.
 - The channel activity threshold now always starts at 30 on load; `0` is only used when you explicitly type it in.
 - Purge lists now separate each channel row with a horizontal rule so dense network groups are easier to read.
+- Selecting a channel in simple search now auto-opens that channel when there is no query text, instead of waiting for a manual submit.
 - Fixed React IRC log search to keep the configured `VITE_API_URL` instead of silently swapping to the browser origin, which was sending requests to the wrong host.
 - Fixed the React date-range helper so channel date bounds can populate the simple search inputs without a runtime scope error.
 - Updated Vite build configuration for `/irclogs-react/` subpath deployment.

@@ -2339,12 +2339,12 @@ export default function SearchPage() {
                                 nextRange = await loadDateRange(networkId, selected);
                             }
 
-                            const hasActiveSearchContext = results !== null
-                                || String(query || '').trim() !== ''
+                            const hasSearchTerms = String(query || '').trim() !== ''
                                 || String(includeTerms || '').trim() !== ''
-                                || String(excludeTerms || '').trim() !== ''
-                                || mode === 'statistics';
-                            if (hasActiveSearchContext) {
+                                || String(excludeTerms || '').trim() !== '';
+                            const shouldOpenChannel = mode === 'simple' && !hasSearchTerms;
+                            const shouldRefreshResults = results !== null || hasSearchTerms || mode === 'statistics';
+                            if (shouldOpenChannel || shouldRefreshResults) {
                                 const firstPage = 1;
                                 setPage(firstPage);
                                 await executeCurrentSearch({
