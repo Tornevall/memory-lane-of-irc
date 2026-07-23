@@ -54,3 +54,9 @@ This document defines implementation rules for `public/irclogs-react` as a stand
 - Do not leave local-only commits for this project unless explicitly requested by operator.
 - `CHANGELOG.md` must be updated for every meaningful change set with concrete, operator-useful details (what changed, why it changed, and operational/deploy impact when relevant).
 - Changelog entries must avoid vague placeholders; include affected surfaces (UI, API contract usage, build/deploy behavior, auth/read-write policy, etc.).
+
+## Version Identity
+
+- The UI must display a visible version label in the shell chrome.
+- Build-time version generation must prefer an exact stable git tag on `HEAD`; if no stable tag is present, fall back to the current short commit hash.
+- Version changes should be sourced from the generated version module so dev and release builds stay consistent.

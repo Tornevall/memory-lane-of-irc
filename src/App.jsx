@@ -3,6 +3,7 @@ import ApiKeyInput from './components/ApiKeyInput';
 import SearchPage from './pages/SearchPage';
 import HighlightsPage from './pages/HighlightsPage';
 import DocsPage from './pages/DocsPage';
+import { IRC_MEMORY_LANE_VERSION, IRC_MEMORY_LANE_VERSION_SOURCE } from './version.generated';
 import './App.css';
 
 function detectRouterBase() {
@@ -25,6 +26,9 @@ export default function App() {
         <div className="navbar-brand">
           <span className="brand-icon">📻</span>
           <span className="brand-name">IRC Memory Lane</span>
+          <span className="brand-version" title={IRC_MEMORY_LANE_VERSION_SOURCE === 'tag' ? 'Stable tag' : 'Current commit'}>
+            {IRC_MEMORY_LANE_VERSION}
+          </span>
         </div>
         <div className="navbar-links">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>

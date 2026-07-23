@@ -31,6 +31,20 @@ body {
 
 .brand-icon { font-size: 1.3rem; }
 
+.brand-version {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid #4f46e5;
+  background: #312e81;
+  color: #c7d2fe;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .navbar-links {
   display: flex;
   gap: 0.25rem;
