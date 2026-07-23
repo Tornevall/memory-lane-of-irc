@@ -65,6 +65,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Added a dedicated nick seen API integration (`/irc/api/nick-seen`) in the nick modal, showing first seen, last seen, total activity, active dates, and top event-type activity with direct viewer link.
 - Statistics charts now render richer date axes (including years) and explicit date-range labels, and top-nicks charts now support Bar/Line/Pie with per-nick toggles.
 - Mode switching now auto-loads logs when clicking **Simple** or **Advanced**, and statistics output is cleared immediately on that transition.
+- Classic log rows now suppress the selected network label when a network filter is already active, keeping the line view tighter without changing the refined cards.
 
 ## [2026-07-20]
 

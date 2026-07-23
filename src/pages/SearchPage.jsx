@@ -370,7 +370,7 @@ function RefinedResultRow({ result, shareSearchQueryString, includeSearchInAncho
   );
 }
 
-function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick }) {
+function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick, showNetwork = true }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const eventType = String(result.event_type ?? 'UNKNOWN').trim().toUpperCase() || 'UNKNOWN';
   const lineBody = String(result.message_text ?? result.event_text ?? result.message ?? result.raw_line ?? '').trim();
@@ -380,7 +380,7 @@ function ClassicResultRow({ result, shareSearchQueryString, includeSearchInAncho
   const network = String(result.network || '').trim();
   const userHost = String(result.user_host || '').trim();
   const wherePart = channel ? ` ${channel}` : '';
-  const networkPart = network ? ` [${network}]` : '';
+  const networkPart = showNetwork && network ? ` [${network}]` : '';
   const hostPart = userHost ? ` (${userHost})` : '';
   const isChannelMessage = channel.startsWith('#');
   const showEventType = !(eventType === 'PRIVMSG' && isChannelMessage);
@@ -426,7 +426,7 @@ function getBulkPreviewLines(result) {
     .filter((line) => line !== '');
 }
 
-function BulkEventCard({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick, variant = 'refined' }) {
+function BulkEventCard({ result, shareSearchQueryString, includeSearchInAnchor, onNickClick, variant = 'refined', showNetwork = true }) {
   const { rowId, rowHref, hasHashMatch } = buildRowIdentity(result, shareSearchQueryString, includeSearchInAnchor);
   const eventType = String(result.event_type ?? 'MODE_BULK').trim().toUpperCase() || 'MODE_BULK';
   const rowShortId = String(result.id ?? result.log_event_id ?? result.event_id ?? '').trim();
@@ -448,7 +448,7 @@ function BulkEventCard({ result, shareSearchQueryString, includeSearchInAnchor, 
             {` <${nick}>`}
           </button>
           {channel && <span className="classic-channel"> {channel}</span>}
-          {network && <span className="classic-network"> [{network}]</span>}
+          {showNetwork && network && <span className="classic-network"> [{network}]</span>}
         </div>
         <div className="bulk-card">
           <div className="bulk-card-summary">
@@ -477,7 +477,7 @@ function BulkEventCard({ result, shareSearchQueryString, includeSearchInAnchor, 
         {rowShortId && <a href={rowHref} className="row-anchor-id" title="Direct link to this row">#{rowShortId}</a>}
         <span className="nick"> &lt;{nick}&gt;</span>
         {channel && <span className="channel">{channel}</span>}
-        {network && <span className="network">[{network}]</span>}
+        {showNetwork && network && <span className="network">[{network}]</span>}
         <span className="bulk-count-pill">{countLabel}</span>
       </div>
       <div className="bulk-card">
@@ -1738,8 +1738,9 @@ export default function SearchPage() {
       setError(err.message);
       setSearchSummary(null);
     } finally {
-      if (requestSeq !== searchRequestSeqRef.current) return;
-      setLoading(false);
+      if (requestSeq === searchRequestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -2679,9 +2680,9 @@ export default function SearchPage() {
               const rowKey = String(row.id ?? row.log_event_id ?? `${row.occurred_at}-${row.nick}-${row.event_type}`);
               rendered.push(
                 String(row.event_type || '').toUpperCase() === 'MODE_BULK'
-                  ? <BulkEventCard key={rowKey} result={row} variant={resultView} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                  ? <BulkEventCard key={rowKey} result={row} variant={resultView} showNetwork={!String(networkId || '').trim()} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
                   : (resultView === 'classic'
-                    ? <ClassicResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
+                    ? <ClassicResultRow key={rowKey} result={row} showNetwork={!String(networkId || '').trim()} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />
                     : <RefinedResultRow key={rowKey} result={row} shareSearchQueryString={lastSearchQueryString} includeSearchInAnchor={includeQueryInAnchorLinks} onNickClick={handleNickWhoisClick} />)
               );
             });
