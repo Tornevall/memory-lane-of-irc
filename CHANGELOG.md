@@ -66,7 +66,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Statistics charts now render richer date axes (including years) and explicit date-range labels, and top-nicks charts now support Bar/Line/Pie with per-nick toggles.
 - Mode switching now auto-loads logs when clicking **Simple** or **Advanced**, and statistics output is cleared immediately on that transition.
 - Classic log rows now suppress the selected network label when a network filter is already active, keeping the line view tighter without changing the refined cards.
-- The channel activity threshold control is now editable below 30 again, and purge actions now present production-only deletion instead of sandbox/both scope choices.
+- The channel activity threshold control is clamped back to a minimum of 30, and purge actions now present production-only deletion instead of sandbox/both scope choices.
 - The React date-range helper now stops trying the legacy `/api/networks/.../date-intervals` path first, which avoids the 404 from the wrong API base on the current deploy.
 
 ## [2026-07-20]
