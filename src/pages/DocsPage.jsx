@@ -2,12 +2,18 @@ import { getApiBaseUrl } from '../services/api';
 
 export default function DocsPage() {
   const apiBaseUrl = getApiBaseUrl();
+  const toolsDocsUrl = `${apiBaseUrl}/docs`;
 
   return (
     <div className="page docs-page">
       <h1>API Documentation</h1>
       <p className="docs-intro">
         Base URL: <code>{apiBaseUrl}</code>
+      </p>
+      <p className="docs-intro">
+        Documentation: <a href="https://loggarna.tornevall.net/docs" target="_blank" rel="noreferrer">loggarna.tornevall.net/docs</a>
+        {' '}|{' '}
+        <a href={toolsDocsUrl} target="_blank" rel="noreferrer">tools docs</a>
       </p>
 
       <section className="docs-section">
