@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+- No pending changes.
+
+## [1.0.1] - 2026-07-23
+
 ### Added
 - Added `Makefile` for operator-friendly commands: `install`, `dev`, `build`, `rebuild`, `preview`, and `lint`.
 - Added Makefile `help` target (default) to list available build/dev commands.
@@ -73,7 +77,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - The channel activity threshold control is editable again and can be set to 0 to show every channel, while the default still starts at 30; purge actions now present production-only deletion instead of sandbox/both scope choices.
 - The React date-range helper now stops trying the legacy `/api/networks/.../date-intervals` path first, which avoids the 404 from the wrong API base on the current deploy.
 
-## [2026-07-20]
+## [1.0.0] - 2026-07-20
 
 ### Added
 - Added project-level `CHANGELOG.md` using Keep a Changelog format.
@@ -88,19 +92,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   - AJAX/API-driven behavior and deep-link parity.
   - Two-phase import/review expectations.
   - Subdirectory deploy constraints under `/irclogs-react/`.
+- Added initial complete React application for IRC Memory Lane API integration.
+- Added IRC logs API integration work (merged from `copilot/add-irc-logs-api`).
+- Added repository bootstrapping (initial commit and planning scaffold).
 
 ### Changed
 - Changed Vite production base path to `/irclogs-react/` so assets resolve correctly when served from subdirectory.
 - Changed Vite build output strategy to emit deploy-ready files in-place for this hosted setup.
-
-## [2026-02-27]
-
-### Changed
 - General project update commit (`Update.`) to current app state.
-
-## [2026-02-25]
-
-### Added
-- Added initial complete React application for IRC Memory Lane API integration.
-- Added IRC logs API integration work (merged from `copilot/add-irc-logs-api`).
-- Added repository bootstrapping (initial commit and planning scaffold).
