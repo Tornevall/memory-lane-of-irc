@@ -1,50 +1,22 @@
-import { useState, useEffect } from 'react';
 import { isTrustedNoKeyHost } from '../services/authMode';
+import { hasConfiguredApiKey } from '../services/apiKey';
 
 export default function ApiKeyInput() {
-  const [key, setKey] = useState('');
-  const [saved, setSaved] = useState(false);
   const trustedNoKeyHost = isTrustedNoKeyHost();
-  const hasKey = key.trim().length > 0;
-
-  useEffect(() => {
-    const stored = localStorage.getItem('irc_api_key') || '';
-    setKey(stored);
-  }, []);
-
-  function handleSave() {
-    localStorage.setItem('irc_api_key', key.trim());
-    window.dispatchEvent(new Event('irc-api-key-changed'));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  function handleClear() {
-    localStorage.removeItem('irc_api_key');
-    setKey('');
-    window.dispatchEvent(new Event('irc-api-key-changed'));
-  }
+  const hasKey = hasConfiguredApiKey();
 
   return (
     <div className="api-key-input">
       <input
         type="password"
-        placeholder={trustedNoKeyHost ? 'API Key (optional on this host)' : 'Optional API Key (write access)'}
-        value={key}
-        onChange={(e) => setKey(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        placeholder={trustedNoKeyHost ? 'API key via .env (optional here)' : 'API key via .env'}
+        value={hasKey ? 'configured-in-env' : ''}
+        readOnly
       />
       <span className={`mode-chip ${hasKey ? 'write' : 'readonly'}`}>
         {hasKey || trustedNoKeyHost ? 'Write' : 'Readonly'}
       </span>
-      <button onClick={handleSave} className="btn-save">
-        {saved ? '✓ Saved' : 'Save'}
-      </button>
-      {key && (
-        <button onClick={handleClear} className="btn-clear">
-          Clear
-        </button>
-      )}
+      <span className="api-key-note">.env</span>
     </div>
   );
 }

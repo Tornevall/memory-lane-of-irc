@@ -2,13 +2,18 @@ import { getApiBaseUrl } from '../services/api';
 
 export default function DocsPage() {
   const apiBaseUrl = getApiBaseUrl();
-  const toolsDocsUrl = `${apiBaseUrl}/docs`;
+  const toolsDocsUrl = 'https://tools.tornevall.net/docs';
+  const ircApiRefUrl = 'https://tools.tornevall.net/docs/-ircapi-referensen';
+  const memoryLaneRefUrl = 'https://tools.tornevall.net/memory-lane-referens';
 
   return (
     <div className="page docs-page">
       <h1>API Documentation</h1>
       <p className="docs-intro">
-        Base URL: <code>{apiBaseUrl}</code>
+        Base URL:{' '}
+        <a className="docs-base-link" href={apiBaseUrl} target="_blank" rel="noreferrer">
+          {apiBaseUrl}
+        </a>
       </p>
       <div className="docs-link-row">
         <span className="docs-intro docs-links-label">Documentation:</span>
@@ -16,7 +21,13 @@ export default function DocsPage() {
           loggarna.tornevall.net/docs
         </a>
         <a className="docs-link-chip" href={toolsDocsUrl} target="_blank" rel="noreferrer">
-          tools docs
+          tools.tornevall.net/docs
+        </a>
+        <a className="docs-link-chip" href={ircApiRefUrl} target="_blank" rel="noreferrer">
+          tools.tornevall.net/docs/-ircapi-referensen
+        </a>
+        <a className="docs-link-chip" href={memoryLaneRefUrl} target="_blank" rel="noreferrer">
+          tools.tornevall.net/memory-lane-referens
         </a>
       </div>
 

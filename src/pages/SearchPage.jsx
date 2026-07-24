@@ -12,6 +12,7 @@ import {
     getReadSource,
     simpleSearch,
 } from '../services/api';
+import { getApiKey } from '../services/apiKey';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
 const DEFAULT_PAGE_SIZE = 500;
@@ -35,10 +36,6 @@ const ADVANCED_QUERY_SCOPE_OPTIONS = [
 function normalizeAdvancedQueryScope(value) {
     const normalized = String(value || '').trim().toLowerCase();
     return ADVANCED_QUERY_SCOPE_OPTIONS.some((item) => item.value === normalized) ? normalized : 'all';
-}
-
-function getApiKey() {
-    return localStorage.getItem('irc_api_key') || '';
 }
 
 function getCookieValue(name) {

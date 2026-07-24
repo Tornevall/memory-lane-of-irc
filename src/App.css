@@ -86,6 +86,11 @@ body {
   border-color: #7c8cf8;
 }
 
+.api-key-note {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
 .btn-save, .btn-clear {
   padding: 0.35rem 0.7rem;
   border-radius: 6px;
@@ -1032,6 +1037,15 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
 
 .docs-links-label {
   margin: 0;
+}
+
+.docs-base-link {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+.docs-base-link:hover {
+  color: #c7d2fe;
 }
 
 .docs-link-chip {

@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getHighlights, createHighlight, getPermalinkUrl } from '../services/api';
 import { hasWriteAccess, isTrustedNoKeyHost } from '../services/authMode';
-
-function getApiKey() {
-  return localStorage.getItem('irc_api_key') || '';
-}
+import { getApiKey } from '../services/apiKey';
 
 export default function HighlightsPage() {
-  const [apiKey, setApiKey] = useState(getApiKey());
+  const apiKey = getApiKey();
   const trustedNoKeyHost = isTrustedNoKeyHost();
   const canWrite = hasWriteAccess(apiKey);
   const [highlights, setHighlights] = useState([]);
@@ -43,18 +40,12 @@ export default function HighlightsPage() {
 
   useEffect(() => {
     fetchHighlights();
-  }, [apiKey]);
-
-  useEffect(() => {
-    const syncApiKey = () => setApiKey(getApiKey());
-    window.addEventListener('irc-api-key-changed', syncApiKey);
-    return () => window.removeEventListener('irc-api-key-changed', syncApiKey);
   }, []);
 
   async function handleCreate(e) {
     e.preventDefault();
     if (!canWrite) {
-      setCreateError('Readonly mode active. Add API key to create highlights/comments.');
+      setCreateError('Readonly mode active. Set VITE_IRC_API_KEY in .env to create highlights/comments.');
       return;
     }
     setCreating(true);
@@ -96,7 +87,7 @@ export default function HighlightsPage() {
 
       {!canWrite && (
         <div className="readonly-banner">
-          Readonly mode: browsing is allowed. Add API key for writing highlights/comments.
+          Readonly mode: browsing is allowed. Configure VITE_IRC_API_KEY in .env for writing highlights/comments.
         </div>
       )}
       {trustedNoKeyHost && !apiKey && (
