@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import ApiKeyInput from './components/ApiKeyInput';
 import SearchPage from './pages/SearchPage';
 import HighlightsPage from './pages/HighlightsPage';
@@ -37,7 +37,7 @@ export default function App() {
           <NavLink to="/highlights" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             Highlights
           </NavLink>
-          <NavLink to="/docs" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+          <NavLink to="/api-docs" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             API Docs
           </NavLink>
         </div>
@@ -49,7 +49,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
-          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/api-docs" element={<DocsPage />} />
+          <Route path="/docs" element={<Navigate to="/api-docs" replace />} />
         </Routes>
       </main>
     </BrowserRouter>
