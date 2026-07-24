@@ -2,9 +2,8 @@ import { getApiBaseUrl } from '../services/api';
 
 export default function DocsPage() {
   const apiBaseUrl = getApiBaseUrl();
-  const toolsDocsUrl = 'https://tools.tornevall.net/docs';
-  const ircApiRefUrl = 'https://tools.tornevall.net/docs/-ircapi-referensen';
-  const memoryLaneRefUrl = 'https://tools.tornevall.net/memory-lane-referens';
+  const ircApiReferenceUrl = 'https://tools.tornevall.net/docs/irclog-api-reference';
+  const ircApiGuideUrl = 'https://tools.tornevall.net/docs/irclog-api-guide';
 
   return (
     <div className="page docs-page">
@@ -17,17 +16,9 @@ export default function DocsPage() {
       </p>
       <div className="docs-link-row">
         <span className="docs-intro docs-links-label">Documentation:</span>
-        <a className="docs-link-chip" href="https://loggarna.tornevall.net/docs" target="_blank" rel="noreferrer">
-          loggarna.tornevall.net/docs
-        </a>
-        <a className="docs-link-chip" href={toolsDocsUrl} target="_blank" rel="noreferrer">
-          tools.tornevall.net/docs
-        </a>
-        <a className="docs-link-chip" href={ircApiRefUrl} target="_blank" rel="noreferrer">
-          tools.tornevall.net/docs/-ircapi-referensen
-        </a>
-        <a className="docs-link-chip" href={memoryLaneRefUrl} target="_blank" rel="noreferrer">
-          tools.tornevall.net/memory-lane-referens
+        <span className="docs-intro docs-links-label">Current page: {ircApiReferenceUrl}</span>
+        <a className="docs-link-chip" href={ircApiGuideUrl} target="_blank" rel="noreferrer">
+          tools.tornevall.net/docs/irclog-api-guide
         </a>
       </div>
 
