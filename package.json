@@ -1,7 +1,7 @@
 {
   "name": "memory-lane-of-irc",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "predev": "node scripts/write-version.mjs",

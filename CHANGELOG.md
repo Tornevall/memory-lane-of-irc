@@ -9,6 +9,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - No pending changes.
 
+## [1.0.2] - 2026-07-24
+
+### Changed
+- Moved the React docs route from `/docs` to `/api-docs` and added a redirect route inside React, avoiding clashes with the backend `/docs` pages that caused 302→404 behavior.
+- Updated the docs page link set to focus on the IRC API guide path and clarified the current reference page context in the header row.
+- Switched frontend API-token handling from browser `localStorage` to environment configuration (`VITE_IRC_API_KEY`) and updated search/highlights/auth UI messaging accordingly.
+- Added explicit clickable docs/base links styling improvements so docs targets are clearly actionable in the React docs view.
+- Reduced slow/failing background stats pressure in simple mode by tightening when mini-stats calls are made and no longer blocking search completion on that secondary request.
+
+### Fixed
+- Prevented recurring `aggregate=stats` background failures from degrading perceived search responsiveness during normal simple searches.
+
 ## [1.0.1] - 2026-07-23
 
 ### Added
