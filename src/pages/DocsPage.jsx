@@ -10,11 +10,15 @@ export default function DocsPage() {
       <p className="docs-intro">
         Base URL: <code>{apiBaseUrl}</code>
       </p>
-      <p className="docs-intro">
-        Documentation: <a href="https://loggarna.tornevall.net/docs" target="_blank" rel="noreferrer">loggarna.tornevall.net/docs</a>
-        {' '}|{' '}
-        <a href={toolsDocsUrl} target="_blank" rel="noreferrer">tools docs</a>
-      </p>
+      <div className="docs-link-row">
+        <span className="docs-intro docs-links-label">Documentation:</span>
+        <a className="docs-link-chip" href="https://loggarna.tornevall.net/docs" target="_blank" rel="noreferrer">
+          loggarna.tornevall.net/docs
+        </a>
+        <a className="docs-link-chip" href={toolsDocsUrl} target="_blank" rel="noreferrer">
+          tools docs
+        </a>
+      </div>
 
       <section className="docs-section">
         <h2>Authentication</h2>

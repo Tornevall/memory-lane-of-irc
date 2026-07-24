@@ -1022,25 +1022,45 @@ h2 { font-size: 1.2rem; color: #a5b4fc; margin-bottom: 0.5rem; }
   margin: 0.5rem 0 1.5rem;
 }
 
-.docs-page a {
-  color: #93c5fd;
-  text-decoration: underline;
-  text-decoration-color: rgba(147, 197, 253, 0.45);
+.docs-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.2rem 0 1.5rem;
 }
 
-.docs-page a:visited {
+.docs-links-label {
+  margin: 0;
+}
+
+.docs-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #111827;
+  color: #93c5fd;
+  text-decoration: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.docs-link-chip:visited {
   color: #93c5fd;
 }
 
-.docs-page a:hover {
+.docs-link-chip:hover {
+  border-color: #4f46e5;
+  background: #312e81;
   color: #c7d2fe;
-  text-decoration-color: #c7d2fe;
 }
 
-.docs-page a:focus-visible {
+.docs-link-chip:focus-visible {
   outline: 2px solid #6366f1;
   outline-offset: 2px;
-  border-radius: 2px;
 }
 
 .docs-section {
