@@ -1681,7 +1681,7 @@ export default function SearchPage() {
             const trimmedIncludeTerms = String(normalizedCriteria.includeTerms || '').trim();
             const trimmedExcludeTerms = String(normalizedCriteria.excludeTerms || '').trim();
             const shouldLoadMiniStats = normalizedCriteria.mode === 'simple'
-                && (normalizedCriteria.networkId || normalizedCriteria.channelId || trimmedQuery || trimmedIncludeTerms || trimmedExcludeTerms);
+                && (trimmedQuery !== '' || trimmedIncludeTerms !== '' || trimmedExcludeTerms !== '');
             let miniStatsResolved = false;
             let miniStatsPayload = null;
             const applyMiniStats = (payload) => {
@@ -1805,7 +1805,7 @@ export default function SearchPage() {
                 if (requestSeq !== searchRequestSeqRef.current) return;
                 setResults(nextResults);
             }
-            await miniStatsPromise;
+            void miniStatsPromise;
         } catch (err) {
             if (requestSeq !== searchRequestSeqRef.current) return;
             setError(err.message);
