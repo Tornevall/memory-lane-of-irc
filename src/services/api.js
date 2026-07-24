@@ -248,6 +248,8 @@ export async function advancedSearch(apiKey, body) {
   appendIfPresent(params, 'network_id', body?.network_id);
   appendIfPresent(params, 'channel_id', body?.channel_id);
   appendIfPresent(params, 'nick', body?.nick);
+  appendIfPresent(params, 'user', body?.user);
+  appendIfPresent(params, 'host', body?.host);
   appendIfPresent(params, 'date_from', body?.date_from);
   appendIfPresent(params, 'date_to', body?.date_to);
   appendIfPresent(params, 'event_types', body?.event_types);

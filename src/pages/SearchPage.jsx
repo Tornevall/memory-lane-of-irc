@@ -240,7 +240,9 @@ function buildSearchParamsFromCriteria(criteria) {
     pushParam(params, 'include_terms', criteria?.includeTerms);
     pushParam(params, 'exclude_terms', criteria?.excludeTerms);
     pushParam(params, 'network', criteria?.networkId);
+    pushParam(params, 'network_id', criteria?.networkId);
     pushParam(params, 'channel', criteria?.channelId);
+    pushParam(params, 'channel_id', criteria?.channelId);
     pushParam(params, 'limit', criteria?.limit);
     pushParam(params, 'page', criteria?.page);
 
@@ -250,6 +252,8 @@ function buildSearchParamsFromCriteria(criteria) {
     } else {
         pushParam(params, 'query_scope', normalizeAdvancedQueryScope(criteria?.queryScope));
         pushParam(params, 'nick', criteria?.nick);
+        pushParam(params, 'user', criteria?.user);
+        pushParam(params, 'host', criteria?.host);
         pushParam(params, 'date_from', criteria?.dateFrom);
         pushParam(params, 'date_to', criteria?.dateTo);
     }
@@ -261,9 +265,27 @@ function buildSearchParamsFromCriteria(criteria) {
 function parseCriteriaFromLocation(searchText) {
     const params = new URLSearchParams(String(searchText || ''));
     const rawMode = String(params.get('mode') || '').trim().toLowerCase();
-    const mode = ['simple', 'advanced', 'statistics'].includes(rawMode) ? rawMode : 'simple';
+    const hasAdvancedFiltersInUrl = [
+        params.get('nick'),
+        params.get('user'),
+        params.get('username'),
+        params.get('host'),
+        params.get('hostname'),
+        params.get('date_from'),
+        params.get('date_to'),
+    ].some((value) => String(value || '').trim() !== '');
+    const mode = ['simple', 'advanced', 'statistics'].includes(rawMode)
+        ? rawMode
+        : (hasAdvancedFiltersInUrl ? 'advanced' : 'simple');
     const view = params.get('view') === 'refined' ? 'refined' : 'classic';
     const rawEventTypes = params.get('event_types');
+    const legacyDate = String(params.get('date') || '').trim();
+    const simpleFromParam = params.get('from') || params.get('datetime_from') || '';
+    const simpleToParam = params.get('to') || params.get('datetime_to') || '';
+    const simpleDateTimeFrom = simpleFromParam || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? `${legacyDate}T00:00` : '');
+    const simpleDateTimeTo = simpleToParam || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? `${legacyDate}T23:59` : '');
+    const advancedDateFrom = params.get('date_from') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
+    const advancedDateTo = params.get('date_to') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
     const rawLimit = normalizePageSize(params.get('limit') || getInitialPageSize());
     const rawPage = Number.parseInt(params.get('page') || '', 10);
     return {
@@ -272,14 +294,16 @@ function parseCriteriaFromLocation(searchText) {
         query: params.get('q') || params.get('query') || '',
         includeTerms: params.get('include_terms') || '',
         excludeTerms: params.get('exclude_terms') || '',
-        networkId: params.get('network') || '',
-        channelId: params.get('channel') || '',
-        simpleDateTimeFrom: params.get('from') || '',
-        simpleDateTimeTo: params.get('to') || '',
+        networkId: params.get('network') || params.get('network_id') || '',
+        channelId: params.get('channel') || params.get('channel_id') || '',
+        simpleDateTimeFrom,
+        simpleDateTimeTo,
         queryScope: normalizeAdvancedQueryScope(params.get('query_scope') || 'all'),
         nick: params.get('nick') || '',
-        dateFrom: params.get('date_from') || '',
-        dateTo: params.get('date_to') || '',
+        user: params.get('user') || params.get('username') || '',
+        host: params.get('host') || params.get('hostname') || '',
+        dateFrom: advancedDateFrom,
+        dateTo: advancedDateTo,
         eventTypes: rawEventTypes === null
             ? [...DEFAULT_ACTIVE_EVENT_TYPES]
             : normalizeEventTypes(rawEventTypes || ''),
@@ -293,7 +317,13 @@ function shouldAutoSearchFromCriteria(criteria) {
     const hasTermFilters = String(criteria.includeTerms || '').trim().length > 0
         || String(criteria.excludeTerms || '').trim().length > 0;
     if (criteria.mode === 'advanced') {
-        return String(criteria.query || '').trim().length > 0 || hasTermFilters;
+        return String(criteria.query || '').trim().length > 0
+            || String(criteria.nick || '').trim().length > 0
+            || String(criteria.user || '').trim().length > 0
+            || String(criteria.host || '').trim().length > 0
+            || String(criteria.dateFrom || '').trim().length > 0
+            || String(criteria.dateTo || '').trim().length > 0
+            || hasTermFilters;
     }
     if (criteria.mode === 'statistics') {
         return true;
@@ -1134,6 +1164,8 @@ export default function SearchPage() {
     const [loadingNetworks, setLoadingNetworks] = useState(false);
     const [loadingChannels, setLoadingChannels] = useState(false);
     const [nick, setNick] = useState('');
+    const [user, setUser] = useState('');
+    const [host, setHost] = useState('');
     const [eventTypes, setEventTypes] = useState([...DEFAULT_ACTIVE_EVENT_TYPES]);
     const [nickSuggestions, setNickSuggestions] = useState([]);
     const [loadingNickSuggestions, setLoadingNickSuggestions] = useState(false);
@@ -1583,6 +1615,8 @@ export default function SearchPage() {
         setSimpleDateTimeFrom(parsedCriteria.simpleDateTimeFrom);
         setSimpleDateTimeTo(parsedCriteria.simpleDateTimeTo);
         setNick(parsedCriteria.nick);
+        setUser(parsedCriteria.user);
+        setHost(parsedCriteria.host);
         setDateFrom(parsedCriteria.dateFrom);
         setDateTo(parsedCriteria.dateTo);
         setEventTypes(normalizeEventTypes(parsedCriteria.eventTypes));
@@ -1655,6 +1689,8 @@ export default function SearchPage() {
             simpleDateTimeFrom: String(criteria?.simpleDateTimeFrom ?? ''),
             simpleDateTimeTo: String(criteria?.simpleDateTimeTo ?? ''),
             nick: String(criteria?.nick ?? ''),
+            user: String(criteria?.user ?? ''),
+            host: String(criteria?.host ?? ''),
             dateFrom: String(criteria?.dateFrom ?? ''),
             dateTo: String(criteria?.dateTo ?? ''),
             eventTypes: normalizeEventTypes(criteria?.eventTypes),
@@ -1762,6 +1798,8 @@ export default function SearchPage() {
                 if (effectiveNetworkId) body.network_id = Number(effectiveNetworkId);
                 if (normalizedCriteria.channelId) body.channel_id = Number(normalizedCriteria.channelId);
                 if (normalizedCriteria.nick) body.nick = normalizedCriteria.nick;
+                if (normalizedCriteria.user) body.user = normalizedCriteria.user;
+                if (normalizedCriteria.host) body.host = normalizedCriteria.host;
                 if (normalizedCriteria.dateFrom) body.date_from = normalizedCriteria.dateFrom;
                 if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
                 if (normalizedCriteria.eventTypes.length > 0) body.event_types = normalizedCriteria.eventTypes.join(',');
@@ -1833,6 +1871,8 @@ export default function SearchPage() {
             simpleDateTimeFrom,
             simpleDateTimeTo,
             nick,
+            user,
+            host,
             dateFrom,
             dateTo,
             eventTypes,
@@ -1856,6 +1896,8 @@ export default function SearchPage() {
             simpleDateTimeFrom,
             simpleDateTimeTo,
             nick,
+            user,
+            host,
             dateFrom,
             dateTo,
             eventTypes,
@@ -2063,6 +2105,8 @@ export default function SearchPage() {
             simpleDateTimeFrom,
             simpleDateTimeTo,
             nick,
+            user,
+            host,
             dateFrom,
             dateTo,
             eventTypes,
@@ -2110,6 +2154,8 @@ export default function SearchPage() {
             simpleDateTimeFrom,
             simpleDateTimeTo,
             nick,
+            user,
+            host,
             dateFrom,
             dateTo,
             eventTypes,
@@ -2169,7 +2215,16 @@ export default function SearchPage() {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder={mode === 'simple' ? 'Optional. Leave empty to open channel logs.' : (mode === 'statistics' ? 'Optional filter for statistics...' : 'Search query...')}
-                        required={mode === 'advanced' && !String(includeTerms || '').trim() && !String(excludeTerms || '').trim()}
+                        required={
+                            mode === 'advanced'
+                            && !String(includeTerms || '').trim()
+                            && !String(excludeTerms || '').trim()
+                            && !String(nick || '').trim()
+                            && !String(user || '').trim()
+                            && !String(host || '').trim()
+                            && !String(dateFrom || '').trim()
+                            && !String(dateTo || '').trim()
+                        }
                     />
                 </div>
                 {mode === 'advanced' && (
@@ -2431,7 +2486,7 @@ export default function SearchPage() {
                                 type="text"
                                 value={nick}
                                 onChange={(e) => setNick(e.target.value)}
-                                placeholder="e.g. Robin"
+                                placeholder="e.g. Robin or Robin*"
                             />
                             {loadingNickSuggestions &&
                                 <small className="loading-hint"><span className="loading-spinner"/>Searching
@@ -2463,6 +2518,24 @@ export default function SearchPage() {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                        <div className="form-row">
+                            <label>Username (optional)</label>
+                            <input
+                                type="text"
+                                value={user}
+                                onChange={(e) => setUser(e.target.value)}
+                                placeholder="e.g. thorne or thorn*"
+                            />
+                        </div>
+                        <div className="form-row">
+                            <label>Hostname (optional)</label>
+                            <input
+                                type="text"
+                                value={host}
+                                onChange={(e) => setHost(e.target.value)}
+                                placeholder="e.g. *.tbcn.telia.com"
+                            />
                         </div>
                         <div className="form-row">
                             <label>Date From</label>
