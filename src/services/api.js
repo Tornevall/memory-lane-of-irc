@@ -13,6 +13,16 @@ const READ_SOURCE = String(import.meta.env.VITE_IRCLOG_READ_SOURCE || 'productio
   : 'production';
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 const LOG_QUERY_TIMEOUT_MS = 120000;
+const STATS_CHUNK_TRIGGER_DAYS = resolvePositiveEnvInt(import.meta.env.VITE_IRC_STATS_CHUNK_TRIGGER_DAYS, 45);
+const STATS_CHUNK_SIZE_DAYS = resolvePositiveEnvInt(import.meta.env.VITE_IRC_STATS_CHUNK_SIZE_DAYS, 14);
+const STATS_CHUNK_MAX_WINDOWS = resolvePositiveEnvInt(import.meta.env.VITE_IRC_STATS_CHUNK_MAX_WINDOWS, 48);
+const STATS_CHUNK_CONCURRENCY = Math.max(1, Math.min(resolvePositiveEnvInt(import.meta.env.VITE_IRC_STATS_CHUNK_CONCURRENCY, 2), 6));
+
+function resolvePositiveEnvInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
 
 function normalizeBaseUrl(raw) {
   const base = String(raw || '').trim();
@@ -201,6 +211,313 @@ async function fetchLogQuery(apiKey, params, fallbackError) {
   );
 }
 
+function normalizeDateOnlyParam(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return '';
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    Number.isNaN(check.getTime())
+    || check.getUTCFullYear() !== year
+    || (check.getUTCMonth() + 1) !== month
+    || check.getUTCDate() !== day
+  ) {
+    return '';
+  }
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+}
+
+function toDaySerial(dateValue) {
+  const normalized = normalizeDateOnlyParam(dateValue);
+  if (!normalized) return null;
+  const [year, month, day] = normalized.split('-').map((part) => Number(part));
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function fromDaySerial(serial) {
+  const d = new Date(Number(serial) * 86400000);
+  return `${d.getUTCFullYear().toString().padStart(4, '0')}-${(d.getUTCMonth() + 1).toString().padStart(2, '0')}-${d.getUTCDate().toString().padStart(2, '0')}`;
+}
+
+function extractDatePart(value) {
+  const normalized = normalizeDateTimeParam(value);
+  if (!normalized) return '';
+  return normalizeDateOnlyParam(normalized.slice(0, 10));
+}
+
+function buildStatsParams(body = {}) {
+  const params = new URLSearchParams();
+  params.set('aggregate', 'stats');
+  appendIfPresent(params, 'q', body?.query);
+  appendIfPresent(params, 'include_terms', body?.include_terms);
+  appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
+  appendIfPresent(params, 'network_id', body?.network_id);
+  appendIfPresent(params, 'channel_id', body?.channel_id);
+  appendIfPresent(params, 'event_types', body?.event_types);
+  appendIfPresent(params, 'date_from', body?.date_from);
+  appendIfPresent(params, 'date_to', body?.date_to);
+  appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
+  appendIfPresent(params, 'datetime_to', normalizeDateTimeParam(body?.datetime_to));
+  if (typeof body?.include_daily_top_nicks === 'boolean') {
+    params.set('include_daily_top_nicks', body.include_daily_top_nicks ? '1' : '0');
+  }
+  appendIfPresent(params, 'channel_password', body?.channel_password);
+  return params;
+}
+
+async function fetchStatsPayload(apiKey, body = {}) {
+  const params = buildStatsParams(body);
+  const data = await fetchLogQuery(apiKey, params, 'Statistics failed');
+  return data || {};
+}
+
+function buildStatsDateChunks(body = {}) {
+  const normalizedDateTimeFrom = normalizeDateTimeParam(body?.datetime_from);
+  const normalizedDateTimeTo = normalizeDateTimeParam(body?.datetime_to);
+  const fromDate = extractDatePart(normalizedDateTimeFrom || body?.date_from);
+  const toDate = extractDatePart(normalizedDateTimeTo || body?.date_to);
+  const fromSerial = toDaySerial(fromDate);
+  const toSerial = toDaySerial(toDate);
+  if (!Number.isInteger(fromSerial) || !Number.isInteger(toSerial)) {
+    return [];
+  }
+
+  const startSerial = Math.min(fromSerial, toSerial);
+  const endSerial = Math.max(fromSerial, toSerial);
+  const spanDays = (endSerial - startSerial) + 1;
+  if (spanDays <= STATS_CHUNK_TRIGGER_DAYS) {
+    return [];
+  }
+
+  const adaptiveChunkSize = Math.max(
+    STATS_CHUNK_SIZE_DAYS,
+    Math.ceil(spanDays / Math.max(STATS_CHUNK_MAX_WINDOWS, 1))
+  );
+  const chunks = [];
+  let cursor = startSerial;
+  while (cursor <= endSerial) {
+    const chunkEndSerial = Math.min(cursor + adaptiveChunkSize - 1, endSerial);
+    const dateFrom = fromDaySerial(cursor);
+    const dateTo = fromDaySerial(chunkEndSerial);
+    chunks.push({
+      date_from: dateFrom,
+      date_to: dateTo,
+      datetime_from: `${dateFrom} 00:00:00`,
+      datetime_to: `${dateTo} 23:59:59`,
+    });
+    cursor = chunkEndSerial + 1;
+  }
+  if (chunks.length <= 1) {
+    return [];
+  }
+  if (normalizedDateTimeFrom && chunks[0]) {
+    chunks[0].datetime_from = normalizedDateTimeFrom;
+  }
+  if (normalizedDateTimeTo && chunks[chunks.length - 1]) {
+    chunks[chunks.length - 1].datetime_to = normalizedDateTimeTo;
+  }
+  return chunks;
+}
+
+function toSafeInt(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  if (parsed <= 0) return 0;
+  return Math.floor(parsed);
+}
+
+function normalizeTimestamp(value) {
+  const normalized = String(value || '').trim();
+  return normalized || '';
+}
+
+function pickEarlierTimestamp(current, candidate) {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  return candidate < current ? candidate : current;
+}
+
+function pickLaterTimestamp(current, candidate) {
+  if (!candidate) return current;
+  if (!current) return candidate;
+  return candidate > current ? candidate : current;
+}
+
+function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false) {
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return {};
+  }
+  const basePayload = chunks[0] || {};
+  let totalRows = 0;
+  let chatRowsTotal = 0;
+  let channelEventRowsTotal = 0;
+  let firstOccurredAt = '';
+  let lastOccurredAt = '';
+
+  const eventTypeCountsMap = new Map();
+  const topNickCountsMap = new Map();
+  const dailyBreakdownMap = new Map();
+  const dailyTopNickMap = new Map();
+
+  chunks.forEach((chunk) => {
+    totalRows += toSafeInt(chunk?.total_rows);
+    chatRowsTotal += toSafeInt(chunk?.chat_rows_total);
+    channelEventRowsTotal += toSafeInt(chunk?.channel_event_rows_total);
+    firstOccurredAt = pickEarlierTimestamp(firstOccurredAt, normalizeTimestamp(chunk?.first_occurred_at));
+    lastOccurredAt = pickLaterTimestamp(lastOccurredAt, normalizeTimestamp(chunk?.last_occurred_at));
+
+    const eventTypeCounts = Array.isArray(chunk?.event_type_counts) ? chunk.event_type_counts : [];
+    eventTypeCounts.forEach((row) => {
+      const eventType = String(row?.event_type || '').trim().toUpperCase() || 'UNKNOWN';
+      const nextValue = toSafeInt(row?.row_count);
+      if (nextValue <= 0) return;
+      eventTypeCountsMap.set(eventType, (eventTypeCountsMap.get(eventType) || 0) + nextValue);
+    });
+
+    const topNicks = Array.isArray(chunk?.top_nicks) ? chunk.top_nicks : [];
+    topNicks.forEach((row) => {
+      const nick = String(row?.nick || '').trim();
+      const nextValue = toSafeInt(row?.row_count);
+      if (!nick || nextValue <= 0) return;
+      topNickCountsMap.set(nick, (topNickCountsMap.get(nick) || 0) + nextValue);
+    });
+
+    const breakdownRows = Array.isArray(chunk?.daily_breakdown) ? chunk.daily_breakdown : [];
+    if (breakdownRows.length > 0) {
+      breakdownRows.forEach((row) => {
+        const dateKey = normalizeDateOnlyParam(row?.log_date);
+        if (!dateKey) return;
+        const current = dailyBreakdownMap.get(dateKey) || {
+          total_rows: 0,
+          chat_rows: 0,
+          channel_event_rows: 0,
+        };
+        current.total_rows += toSafeInt(row?.total_rows ?? row?.row_count);
+        current.chat_rows += toSafeInt(row?.chat_rows);
+        current.channel_event_rows += toSafeInt(row?.channel_event_rows);
+        dailyBreakdownMap.set(dateKey, current);
+      });
+    } else {
+      const dailyRows = Array.isArray(chunk?.daily_counts) ? chunk.daily_counts : [];
+      dailyRows.forEach((row) => {
+        const dateKey = normalizeDateOnlyParam(row?.log_date);
+        if (!dateKey) return;
+        const current = dailyBreakdownMap.get(dateKey) || {
+          total_rows: 0,
+          chat_rows: 0,
+          channel_event_rows: 0,
+        };
+        current.total_rows += toSafeInt(row?.total_rows ?? row?.row_count);
+        dailyBreakdownMap.set(dateKey, current);
+      });
+    }
+
+    if (includeDailyTopNicks) {
+      const dailyTopNicks = Array.isArray(chunk?.daily_top_nicks) ? chunk.daily_top_nicks : [];
+      dailyTopNicks.forEach((row) => {
+        const dateKey = normalizeDateOnlyParam(row?.log_date);
+        const nick = String(row?.nick || '').trim();
+        const nextValue = toSafeInt(row?.row_count);
+        if (!dateKey || !nick || nextValue <= 0) return;
+        const mapKey = `${dateKey}\n${nick}`;
+        dailyTopNickMap.set(mapKey, (dailyTopNickMap.get(mapKey) || 0) + nextValue);
+      });
+    }
+  });
+
+  const eventTypeCounts = Array.from(eventTypeCountsMap.entries())
+    .map(([event_type, row_count]) => ({ event_type, row_count }))
+    .sort((a, b) => (b.row_count - a.row_count) || a.event_type.localeCompare(b.event_type))
+    .slice(0, 60);
+  const topNicks = Array.from(topNickCountsMap.entries())
+    .map(([nick, row_count]) => ({ nick, row_count }))
+    .sort((a, b) => (b.row_count - a.row_count) || a.nick.localeCompare(b.nick))
+    .slice(0, 30);
+  const dailyBreakdown = Array.from(dailyBreakdownMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([log_date, values]) => ({
+      log_date,
+      total_rows: toSafeInt(values.total_rows),
+      chat_rows: toSafeInt(values.chat_rows),
+      channel_event_rows: toSafeInt(values.channel_event_rows),
+    }));
+  const dailyCounts = dailyBreakdown.map((row) => ({
+    log_date: row.log_date,
+    row_count: row.total_rows,
+  }));
+  const dailyTopNicks = includeDailyTopNicks
+    ? Array.from(dailyTopNickMap.entries())
+      .map(([mapKey, row_count]) => {
+        const separatorPos = mapKey.indexOf('\n');
+        return {
+          log_date: mapKey.slice(0, separatorPos),
+          nick: mapKey.slice(separatorPos + 1),
+          row_count,
+        };
+      })
+      .sort((a, b) => {
+        if (a.log_date === b.log_date) {
+          return (b.row_count - a.row_count) || a.nick.localeCompare(b.nick);
+        }
+        return a.log_date.localeCompare(b.log_date);
+      })
+    : [];
+
+  return {
+    ...basePayload,
+    aggregate: 'stats',
+    total_rows: totalRows,
+    first_occurred_at: firstOccurredAt || null,
+    last_occurred_at: lastOccurredAt || null,
+    unique_dates: dailyBreakdown.length,
+    unique_nicks: null,
+    event_type_counts: eventTypeCounts,
+    top_nicks: topNicks,
+    daily_counts: dailyCounts,
+    include_daily_top_nicks: includeDailyTopNicks,
+    daily_top_nicks: dailyTopNicks,
+    daily_breakdown: dailyBreakdown,
+    chat_rows_total: chatRowsTotal,
+    channel_event_rows_total: channelEventRowsTotal,
+    stats_cache: {
+      status: 'client-chunked',
+      ttl_seconds: 0,
+    },
+    stats_chunking: {
+      enabled: true,
+      chunk_count: chunks.length,
+      trigger_days: STATS_CHUNK_TRIGGER_DAYS,
+      chunk_size_days: STATS_CHUNK_SIZE_DAYS,
+      approx_unique_nicks: true,
+      approx_top_nicks: true,
+    },
+  };
+}
+
+async function fetchChunkedStatsPayloads(apiKey, body, chunks) {
+  const queue = chunks.map((chunk, index) => ({ chunk, index }));
+  const mergedChunks = new Array(queue.length);
+  const workers = Array.from({ length: Math.min(STATS_CHUNK_CONCURRENCY, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      const payload = await fetchStatsPayload(apiKey, {
+        ...body,
+        ...next.chunk,
+      });
+      mergedChunks[next.index] = payload || {};
+    }
+  });
+  await Promise.all(workers);
+  return mergedChunks;
+}
+
 export async function simpleSearch(
   apiKey,
   query,
@@ -263,24 +580,13 @@ export async function advancedSearch(apiKey, body) {
 }
 
 export async function getLogStatistics(apiKey, body = {}) {
-  const params = new URLSearchParams();
-  params.set('aggregate', 'stats');
-  appendIfPresent(params, 'q', body?.query);
-  appendIfPresent(params, 'include_terms', body?.include_terms);
-  appendIfPresent(params, 'exclude_terms', body?.exclude_terms);
-  appendIfPresent(params, 'network_id', body?.network_id);
-  appendIfPresent(params, 'channel_id', body?.channel_id);
-  appendIfPresent(params, 'event_types', body?.event_types);
-  appendIfPresent(params, 'date_from', body?.date_from);
-  appendIfPresent(params, 'date_to', body?.date_to);
-  appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
-  appendIfPresent(params, 'datetime_to', normalizeDateTimeParam(body?.datetime_to));
-  if (typeof body?.include_daily_top_nicks === 'boolean') {
-    params.set('include_daily_top_nicks', body.include_daily_top_nicks ? '1' : '0');
+  const statsChunks = buildStatsDateChunks(body);
+  if (statsChunks.length === 0) {
+    return fetchStatsPayload(apiKey, body);
   }
-  appendIfPresent(params, 'channel_password', body?.channel_password);
-  const data = await fetchLogQuery(apiKey, params, 'Statistics failed');
-  return data || {};
+  const includeDailyTopNicks = Boolean(body?.include_daily_top_nicks);
+  const chunkPayloads = await fetchChunkedStatsPayloads(apiKey, body, statsChunks);
+  return mergeChunkedStatsPayload(chunkPayloads, includeDailyTopNicks);
 }
 
 export async function getHighlights(apiKey) {

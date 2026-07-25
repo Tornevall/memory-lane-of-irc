@@ -2736,6 +2736,12 @@ export default function SearchPage() {
                                         className="stats-value">{Number(results.channel_event_rows_total || 0).toLocaleString()}</div>
                                 </div>
                             </div>
+                            {results?.stats_chunking?.enabled && (
+                                <div className="readonly-banner">
+                                    Broad date interval was split into {Number(results.stats_chunking.chunk_count || 0)} chunks.
+                                    Unique/top-nick stats may be approximate in this mode.
+                                </div>
+                            )}
 
                             {(() => {
                                 const dailyRows = buildDailyRows(results);
