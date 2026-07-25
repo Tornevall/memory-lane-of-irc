@@ -40,7 +40,7 @@ export default function App() {
           <NavLink to="/api-docs" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             API Docs
           </NavLink>
-          <a href="/irc/privacy-request" className="nav-link" title="GDPR / Privacy request">
+          <a href="https://tools.tornevall.net/irc/privacy-request" className="nav-link" title="GDPR / Privacy request">
             GDPR / Privacy
           </a>
         </div>
