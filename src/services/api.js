@@ -275,6 +275,9 @@ export async function getLogStatistics(apiKey, body = {}) {
   appendIfPresent(params, 'date_to', body?.date_to);
   appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
   appendIfPresent(params, 'datetime_to', normalizeDateTimeParam(body?.datetime_to));
+  if (typeof body?.include_daily_top_nicks === 'boolean') {
+    params.set('include_daily_top_nicks', body.include_daily_top_nicks ? '1' : '0');
+  }
   appendIfPresent(params, 'channel_password', body?.channel_password);
   const data = await fetchLogQuery(apiKey, params, 'Statistics failed');
   return data || {};

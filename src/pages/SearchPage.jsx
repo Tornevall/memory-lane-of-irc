@@ -1770,6 +1770,7 @@ export default function SearchPage() {
                     datetime_to: normalizedCriteria.simpleDateTimeTo,
                     date_from: normalizedCriteria.simpleDateTimeFrom ? normalizedCriteria.simpleDateTimeFrom.slice(0, 10) : '',
                     date_to: normalizedCriteria.simpleDateTimeTo ? normalizedCriteria.simpleDateTimeTo.slice(0, 10) : '',
+                    include_daily_top_nicks: false,
                     channel_password: normalizedChannelPassword,
                 }).then(applyMiniStats).catch(() => null)
                 : Promise.resolve(null);
@@ -1854,7 +1855,7 @@ export default function SearchPage() {
                 && normalizedCriteria.simpleDateTimeFrom > normalizedCriteria.simpleDateTimeTo
                     ? normalizedCriteria.simpleDateTimeFrom
                     : normalizedCriteria.simpleDateTimeTo;
-                data = await getLogStatistics(apiKey, {
+                const statsRequestPayload = {
                     query: normalizedCriteria.query,
                     include_terms: normalizedCriteria.includeTerms,
                     exclude_terms: normalizedCriteria.excludeTerms,
@@ -1866,6 +1867,10 @@ export default function SearchPage() {
                     date_from: effectiveFrom ? effectiveFrom.slice(0, 10) : '',
                     date_to: effectiveTo ? effectiveTo.slice(0, 10) : '',
                     channel_password: normalizedChannelPassword,
+                };
+                data = await getLogStatistics(apiKey, {
+                    ...statsRequestPayload,
+                    include_daily_top_nicks: false,
                 });
                 const nextResults = {
                     ...data,
@@ -1873,6 +1878,29 @@ export default function SearchPage() {
                 };
                 if (requestSeq !== searchRequestSeqRef.current) return;
                 setResults(nextResults);
+
+                void getLogStatistics(apiKey, {
+                    ...statsRequestPayload,
+                    include_daily_top_nicks: true,
+                })
+                    .then((extraStats) => {
+                        if (requestSeq !== searchRequestSeqRef.current) return;
+                        const extraDailyTopNicks = Array.isArray(extraStats?.daily_top_nicks)
+                            ? extraStats.daily_top_nicks
+                            : [];
+                        if (extraDailyTopNicks.length <= 0) return;
+                        setResults((prev) => {
+                            if (!prev || prev.view_mode !== normalizedCriteria.mode) {
+                                return prev;
+                            }
+                            return {
+                                ...prev,
+                                include_daily_top_nicks: true,
+                                daily_top_nicks: extraDailyTopNicks,
+                            };
+                        });
+                    })
+                    .catch(() => null);
             }
             void miniStatsPromise;
         } catch (err) {
