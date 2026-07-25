@@ -213,7 +213,8 @@ export async function simpleSearch(
   includeTerms = '',
   excludeTerms = '',
   eventTypes = [],
-  focusId = ''
+  focusId = '',
+  channelPassword = ''
 ) {
   const normalizedDateFrom = normalizeDateTimeParam(dateFrom);
   const normalizedDateTo = normalizeDateTimeParam(dateTo);
@@ -225,6 +226,7 @@ export async function simpleSearch(
   appendIfPresent(params, 'channel_id', channelId);
   appendIfPresent(params, 'event_types', Array.isArray(eventTypes) ? eventTypes.join(',') : eventTypes);
   appendIfPresent(params, 'focus_id', focusId);
+  appendIfPresent(params, 'channel_password', channelPassword);
   appendPagination(params, limit, page);
   appendIfPresent(params, 'datetime_from', normalizedDateFrom);
   appendIfPresent(params, 'datetime_to', normalizedDateTo);
@@ -254,6 +256,7 @@ export async function advancedSearch(apiKey, body) {
   appendIfPresent(params, 'date_to', body?.date_to);
   appendIfPresent(params, 'event_types', body?.event_types);
   appendIfPresent(params, 'focus_id', body?.focus_id);
+  appendIfPresent(params, 'channel_password', body?.channel_password);
   appendPagination(params, body?.limit, body?.page);
   const data = await fetchLogQuery(apiKey, params, 'Search failed');
   return data || {};
@@ -272,6 +275,7 @@ export async function getLogStatistics(apiKey, body = {}) {
   appendIfPresent(params, 'date_to', body?.date_to);
   appendIfPresent(params, 'datetime_from', normalizeDateTimeParam(body?.datetime_from));
   appendIfPresent(params, 'datetime_to', normalizeDateTimeParam(body?.datetime_to));
+  appendIfPresent(params, 'channel_password', body?.channel_password);
   const data = await fetchLogQuery(apiKey, params, 'Statistics failed');
   return data || {};
 }
@@ -421,7 +425,7 @@ function toIsoDate(value) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function getChannelDateRange(apiKey, networkId, channelId) {
+export async function getChannelDateRange(apiKey, networkId, channelId, channelPassword = '') {
   if (!channelId) {
     return { firstDate: '', lastDate: '', total: 0 };
   }
@@ -429,6 +433,7 @@ export async function getChannelDateRange(apiKey, networkId, channelId) {
   const firstParams = new URLSearchParams();
   appendIfPresent(firstParams, 'network_id', networkId);
   appendIfPresent(firstParams, 'channel_id', channelId);
+  appendIfPresent(firstParams, 'channel_password', channelPassword);
   firstParams.append('limit', '1');
   firstParams.append('offset', '0');
 
@@ -444,6 +449,7 @@ export async function getChannelDateRange(apiKey, networkId, channelId) {
   const lastParams = new URLSearchParams();
   appendIfPresent(lastParams, 'network_id', networkId);
   appendIfPresent(lastParams, 'channel_id', channelId);
+  appendIfPresent(lastParams, 'channel_password', channelPassword);
   lastParams.append('limit', '1');
   lastParams.append('offset', String(Math.max(total - 1, 0)));
 

@@ -1155,6 +1155,7 @@ export default function SearchPage() {
     const [excludeTerms, setExcludeTerms] = useState('');
     const [networkId, setNetworkId] = useState('');
     const [channelId, setChannelId] = useState('');
+    const [channelPassword, setChannelPassword] = useState('');
     const [channelFilter, setChannelFilter] = useState('');
     const [channelActivityThreshold, setChannelActivityThreshold] = useState(getInitialChannelActivityThreshold());
     const [networks, setNetworks] = useState([]);
@@ -1304,9 +1305,12 @@ export default function SearchPage() {
         : (Array.isArray(networks) ? networks : []);
 
     const channelOptions = (Array.isArray(channels) ? channels : []).filter((channel) => {
+        const requiresPassword = channel?.requires_password === true
+            || channel?.requires_password === 1
+            || channel?.requires_password === '1';
         const activityCount = Number(channel?.event_count ?? channel?.activity_count ?? channel?.row_count ?? channel?.total_rows ?? 0);
         const threshold = normalizeChannelActivityThreshold(channelActivityThreshold);
-        if (!Number.isFinite(activityCount) || activityCount < threshold) {
+        if (!requiresPassword && (!Number.isFinite(activityCount) || activityCount < threshold)) {
             return false;
         }
         const filter = String(channelFilter || '').trim().toLowerCase();
@@ -1317,6 +1321,8 @@ export default function SearchPage() {
         return idText.includes(filter) || nameText.includes(filter) || networkText.includes(filter);
     });
     const channelListSize = Math.min(Math.max(channelOptions.length + 1, 8), 18);
+    const selectedChannelForView = getChannelById(channelId);
+    const selectedChannelRequiresPassword = Boolean(selectedChannelForView?.requires_password);
     const hasAllEventTypesSelected = EVENT_TYPE_OPTIONS.every((type) => eventTypes.includes(type));
     const availableTopNicks = Array.isArray(results?.top_nicks)
         ? results.top_nicks
@@ -1403,7 +1409,7 @@ export default function SearchPage() {
         return {from: minValue, to: maxValue};
     }
 
-    async function loadDateRange(selectedNetworkId, selectedChannelId) {
+    async function loadDateRange(selectedNetworkId, selectedChannelId, suppliedChannelPassword = channelPassword) {
         if (!selectedChannelId) {
             setSimpleDateTimeFrom('');
             setSimpleDateTimeTo('');
@@ -1412,11 +1418,19 @@ export default function SearchPage() {
             return {from: '', to: ''};
         }
         const selectedChannel = getChannelById(selectedChannelId);
+        const normalizedPassword = String(suppliedChannelPassword || '').trim();
+        if (selectedChannel?.requires_password && !normalizedPassword) {
+            setSimpleDateTimeFrom('');
+            setSimpleDateTimeTo('');
+            setSimpleMinDateTime('');
+            setSimpleMaxDateTime('');
+            return {from: '', to: ''};
+        }
         const effectiveNetworkId = selectedNetworkId || selectedChannel?.network_id || selectedChannel?.networkId || '';
         const apiKey = getApiKey();
         setLoadingDateRange(true);
         try {
-            const range = await getChannelDateRange(apiKey, effectiveNetworkId, selectedChannelId);
+            const range = await getChannelDateRange(apiKey, effectiveNetworkId, selectedChannelId, normalizedPassword);
             return applyDateRange(range.firstDate || '', range.lastDate || '');
         } catch {
             setSimpleDateTimeFrom('');
@@ -1472,6 +1486,9 @@ export default function SearchPage() {
                     first_date: channel?.first_date || '',
                     last_date: channel?.last_date || '',
                     event_count: Number(channel?.event_count ?? channel?.row_count ?? channel?.activity_count ?? 0) || 0,
+                    requires_password: channel?.requires_password === true
+                        || channel?.requires_password === 1
+                        || channel?.requires_password === '1',
                 };
             });
         }
@@ -1658,8 +1675,8 @@ export default function SearchPage() {
         if (String(simpleDateTimeFrom || '').trim() || String(simpleDateTimeTo || '').trim()) {
             return;
         }
-        loadDateRange(networkId, channelId);
-    }, [channelsReady, channelId, mode, simpleDateTimeFrom, simpleDateTimeTo, networkId]);
+        loadDateRange(networkId, channelId, channelPassword);
+    }, [channelsReady, channelId, mode, simpleDateTimeFrom, simpleDateTimeTo, networkId, channelPassword]);
 
     useEffect(() => {
         const hash = String(window.location.hash || '');
@@ -1700,6 +1717,16 @@ export default function SearchPage() {
         };
         const selectedChannel = getChannelById(normalizedCriteria.channelId);
         const effectiveNetworkId = normalizedCriteria.networkId || String(selectedChannel?.network_id || '');
+        const selectedChannelRequiresPasswordForSearch = Boolean(selectedChannel?.requires_password);
+        const normalizedChannelPassword = selectedChannelRequiresPasswordForSearch
+            ? String(channelPassword || '').trim()
+            : '';
+        if (selectedChannelRequiresPasswordForSearch && normalizedChannelPassword === '') {
+            setError('This channel is password protected. Enter the channel password to continue.');
+            setLoading(false);
+            setResults(null);
+            return;
+        }
         const shareQueryString = buildSearchParamsFromCriteria(normalizedCriteria);
         setLastSearchQueryString(shareQueryString);
         setSearchSummary(null);
@@ -1743,6 +1770,7 @@ export default function SearchPage() {
                     datetime_to: normalizedCriteria.simpleDateTimeTo,
                     date_from: normalizedCriteria.simpleDateTimeFrom ? normalizedCriteria.simpleDateTimeFrom.slice(0, 10) : '',
                     date_to: normalizedCriteria.simpleDateTimeTo ? normalizedCriteria.simpleDateTimeTo.slice(0, 10) : '',
+                    channel_password: normalizedChannelPassword,
                 }).then(applyMiniStats).catch(() => null)
                 : Promise.resolve(null);
 
@@ -1770,7 +1798,8 @@ export default function SearchPage() {
                     trimmedIncludeTerms,
                     trimmedExcludeTerms,
                     normalizedCriteria.eventTypes,
-                    normalizedCriteria.focusId
+                    normalizedCriteria.focusId,
+                    normalizedChannelPassword
                 );
                 const nextResults = {
                     ...data,
@@ -1803,6 +1832,7 @@ export default function SearchPage() {
                 if (normalizedCriteria.dateFrom) body.date_from = normalizedCriteria.dateFrom;
                 if (normalizedCriteria.dateTo) body.date_to = normalizedCriteria.dateTo;
                 if (normalizedCriteria.eventTypes.length > 0) body.event_types = normalizedCriteria.eventTypes.join(',');
+                if (normalizedChannelPassword) body.channel_password = normalizedChannelPassword;
                 data = await advancedSearch(apiKey, body);
                 const nextResults = {
                     ...data,
@@ -1835,6 +1865,7 @@ export default function SearchPage() {
                     datetime_to: effectiveTo,
                     date_from: effectiveFrom ? effectiveFrom.slice(0, 10) : '',
                     date_to: effectiveTo ? effectiveTo.slice(0, 10) : '',
+                    channel_password: normalizedChannelPassword,
                 });
                 const nextResults = {
                     ...data,
@@ -2311,6 +2342,7 @@ export default function SearchPage() {
                             const selected = e.target.value;
                             setNetworkId(selected);
                             setChannelId('');
+                            setChannelPassword('');
                             setChannelFilter('');
                             setChannels([]);
                             setChannelsReady(false);
@@ -2381,14 +2413,18 @@ export default function SearchPage() {
                         onChange={async (e) => {
                             const selected = e.target.value;
                             setChannelId(selected);
+                            setChannelPassword('');
                             let nextRange = {from: '', to: ''};
                             const selectedChannel = channels.find((channel) => String(getEntityId(channel)) === String(selected));
+                            const selectedRequiresPassword = Boolean(selectedChannel?.requires_password);
                             const first = selectedChannel?.first_date || selectedChannel?.firstDate || '';
                             const last = selectedChannel?.last_date || selectedChannel?.lastDate || '';
-                            if (first || last) {
+                            if (selectedRequiresPassword) {
+                                nextRange = {from: '', to: ''};
+                            } else if (first || last) {
                                 nextRange = applyDateRange(first, last);
                             } else {
-                                nextRange = await loadDateRange(networkId, selected);
+                                nextRange = await loadDateRange(networkId, selected, '');
                             }
 
                             const hasSearchTerms = String(query || '').trim() !== ''
@@ -2416,7 +2452,7 @@ export default function SearchPage() {
                         </option>
                         {channelOptions.map((channel) => (
                             <option key={String(getEntityId(channel))} value={String(getEntityId(channel))}>
-                                {getChannelDisplayLabel(channel, !networkId)}
+                                {channel?.requires_password ? '🔒 ' : ''}{getChannelDisplayLabel(channel, !networkId)}
                             </option>
                         ))}
                     </select>
@@ -2432,7 +2468,25 @@ export default function SearchPage() {
                     {!loadingChannels && channelId && (
                         <small>Reading from: {readSource}</small>
                     )}
+                    {!loadingChannels && selectedChannelRequiresPassword && (
+                        <small className="text-warning">This channel is password protected.</small>
+                    )}
                 </div>
+                {selectedChannelRequiresPassword && (
+                    <div className="form-row">
+                        <label>Channel password</label>
+                        <input
+                            type="password"
+                            value={channelPassword}
+                            onChange={(e) => {
+                                setChannelPassword(e.target.value);
+                                setError('');
+                            }}
+                            placeholder="Enter channel password"
+                        />
+                        <small>Required to open/search this channel.</small>
+                    </div>
+                )}
                 {mode === 'simple' && (
                     <div className="form-row">
                         <label>Date & time range (optional)</label>
