@@ -349,7 +349,7 @@ function pickLaterTimestamp(current, candidate) {
   return candidate > current ? candidate : current;
 }
 
-function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false) {
+function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false, chunkProgress = null) {
   if (!Array.isArray(chunks) || chunks.length === 0) {
     return {};
   }
@@ -451,6 +451,12 @@ function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false) {
     log_date: row.log_date,
     row_count: row.total_rows,
   }));
+  const totalChunkCount = Number.isFinite(Number(chunkProgress?.totalChunkCount))
+    ? Math.max(1, Math.floor(Number(chunkProgress.totalChunkCount)))
+    : chunks.length;
+  const completedChunkCount = Number.isFinite(Number(chunkProgress?.completedChunkCount))
+    ? Math.max(0, Math.min(Math.floor(Number(chunkProgress.completedChunkCount)), totalChunkCount))
+    : chunks.length;
   const dailyTopNicks = includeDailyTopNicks
     ? Array.from(dailyTopNickMap.entries())
       .map(([mapKey, row_count]) => {
@@ -491,7 +497,9 @@ function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false) {
     },
     stats_chunking: {
       enabled: true,
-      chunk_count: chunks.length,
+      chunk_count: totalChunkCount,
+      chunks_loaded: completedChunkCount,
+      is_partial: completedChunkCount < totalChunkCount,
       trigger_days: STATS_CHUNK_TRIGGER_DAYS,
       chunk_size_days: STATS_CHUNK_SIZE_DAYS,
       approx_unique_nicks: true,
@@ -500,9 +508,35 @@ function mergeChunkedStatsPayload(chunks = [], includeDailyTopNicks = false) {
   };
 }
 
-async function fetchChunkedStatsPayloads(apiKey, body, chunks) {
+async function fetchChunkedStatsPayloads(apiKey, body, chunks, options = {}) {
   const queue = chunks.map((chunk, index) => ({ chunk, index }));
   const mergedChunks = new Array(queue.length);
+  let emittedSequentialCount = 0;
+  const includeDailyTopNicks = Boolean(options?.includeDailyTopNicks);
+  const emitProgress = () => {
+    if (typeof options?.onChunk !== 'function') {
+      return;
+    }
+    let nextSequentialCount = 0;
+    while (nextSequentialCount < mergedChunks.length && typeof mergedChunks[nextSequentialCount] !== 'undefined') {
+      nextSequentialCount += 1;
+    }
+    if (nextSequentialCount <= emittedSequentialCount) {
+      return;
+    }
+    emittedSequentialCount = nextSequentialCount;
+    const orderedChunks = mergedChunks.slice(0, nextSequentialCount).map((chunkPayload) => chunkPayload || {});
+    const mergedPayload = mergeChunkedStatsPayload(orderedChunks, includeDailyTopNicks, {
+      totalChunkCount: mergedChunks.length,
+      completedChunkCount: nextSequentialCount,
+    });
+    options.onChunk({
+      payload: mergedPayload,
+      chunk_count: mergedChunks.length,
+      chunks_loaded: nextSequentialCount,
+      is_partial: nextSequentialCount < mergedChunks.length,
+    });
+  };
   const workers = Array.from({ length: Math.min(STATS_CHUNK_CONCURRENCY, queue.length) }, async () => {
     while (queue.length > 0) {
       const next = queue.shift();
@@ -512,10 +546,11 @@ async function fetchChunkedStatsPayloads(apiKey, body, chunks) {
         ...next.chunk,
       });
       mergedChunks[next.index] = payload || {};
+      emitProgress();
     }
   });
   await Promise.all(workers);
-  return mergedChunks;
+  return mergedChunks.map((chunkPayload) => chunkPayload || {});
 }
 
 export async function simpleSearch(
@@ -579,14 +614,20 @@ export async function advancedSearch(apiKey, body) {
   return data || {};
 }
 
-export async function getLogStatistics(apiKey, body = {}) {
+export async function getLogStatistics(apiKey, body = {}, options = {}) {
   const statsChunks = buildStatsDateChunks(body);
   if (statsChunks.length === 0) {
     return fetchStatsPayload(apiKey, body);
   }
   const includeDailyTopNicks = Boolean(body?.include_daily_top_nicks);
-  const chunkPayloads = await fetchChunkedStatsPayloads(apiKey, body, statsChunks);
-  return mergeChunkedStatsPayload(chunkPayloads, includeDailyTopNicks);
+  const chunkPayloads = await fetchChunkedStatsPayloads(apiKey, body, statsChunks, {
+    onChunk: options?.onChunk,
+    includeDailyTopNicks,
+  });
+  return mergeChunkedStatsPayload(chunkPayloads, includeDailyTopNicks, {
+    totalChunkCount: statsChunks.length,
+    completedChunkCount: statsChunks.length,
+  });
 }
 
 export async function getHighlights(apiKey) {

@@ -15,7 +15,7 @@ import {
 import { getApiKey } from '../services/apiKey';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
-const DEFAULT_PAGE_SIZE = 500;
+const DEFAULT_PAGE_SIZE = 100;
 const PAGE_SIZE_COOKIE = 'irclogs_page_size';
 const EVENT_TYPE_OPTIONS = [
     'PRIVMSG', 'ACTION', 'JOIN', 'PART', 'QUIT', 'NICK', 'KICK', 'TOPIC', 'MODE',
@@ -688,6 +688,19 @@ function DateSelector({
 function normalizeMiniStats(payload) {
     if (!payload) return null;
     const topNicks = Array.isArray(payload.top_nicks) ? payload.top_nicks : [];
+    const chunking = payload?.stats_chunking && payload.stats_chunking.enabled
+        ? {
+            enabled: true,
+            chunkCount: toSafeNumber(payload.stats_chunking.chunk_count),
+            chunksLoaded: toSafeNumber(payload.stats_chunking.chunks_loaded),
+            isPartial: Boolean(payload.stats_chunking.is_partial),
+        }
+        : {
+            enabled: false,
+            chunkCount: 0,
+            chunksLoaded: 0,
+            isPartial: false,
+        };
     return {
         totalRows: toSafeNumber(payload.total_rows),
         uniqueNicks: toSafeNumber(payload.unique_nicks ?? topNicks.length),
@@ -696,6 +709,7 @@ function normalizeMiniStats(payload) {
         lastSeen: String(payload.last_occurred_at || payload.last_seen_at || '').trim(),
         chatRowsTotal: toSafeNumber(payload.chat_rows_total),
         channelEventRowsTotal: toSafeNumber(payload.channel_event_rows_total),
+        chunking,
     };
 }
 
@@ -1753,26 +1767,30 @@ export default function SearchPage() {
                 if (!normalizedSummary) return;
                 miniStatsPayload = normalizedSummary;
                 miniStatsResolved = true;
-                if (searchSucceeded) {
-                    setSearchSummary(normalizedSummary);
-                }
+                setSearchSummary(normalizedSummary);
             };
             let searchSucceeded = false;
             const miniStatsPromise = shouldLoadMiniStats
-                ? getLogStatistics(apiKey, {
-                    query: normalizedCriteria.query,
-                    include_terms: normalizedCriteria.includeTerms,
-                    exclude_terms: normalizedCriteria.excludeTerms,
-                    network_id: effectiveNetworkId || '',
-                    channel_id: normalizedCriteria.channelId || '',
-                    event_types: normalizedCriteria.eventTypes.length > 0 ? normalizedCriteria.eventTypes.join(',') : '',
-                    datetime_from: normalizedCriteria.simpleDateTimeFrom,
-                    datetime_to: normalizedCriteria.simpleDateTimeTo,
-                    date_from: normalizedCriteria.simpleDateTimeFrom ? normalizedCriteria.simpleDateTimeFrom.slice(0, 10) : '',
-                    date_to: normalizedCriteria.simpleDateTimeTo ? normalizedCriteria.simpleDateTimeTo.slice(0, 10) : '',
-                    include_daily_top_nicks: false,
-                    channel_password: normalizedChannelPassword,
-                }).then(applyMiniStats).catch(() => null)
+                ? getLogStatistics(
+                    apiKey,
+                    {
+                        query: normalizedCriteria.query,
+                        include_terms: normalizedCriteria.includeTerms,
+                        exclude_terms: normalizedCriteria.excludeTerms,
+                        network_id: effectiveNetworkId || '',
+                        channel_id: normalizedCriteria.channelId || '',
+                        event_types: normalizedCriteria.eventTypes.length > 0 ? normalizedCriteria.eventTypes.join(',') : '',
+                        datetime_from: normalizedCriteria.simpleDateTimeFrom,
+                        datetime_to: normalizedCriteria.simpleDateTimeTo,
+                        date_from: normalizedCriteria.simpleDateTimeFrom ? normalizedCriteria.simpleDateTimeFrom.slice(0, 10) : '',
+                        date_to: normalizedCriteria.simpleDateTimeTo ? normalizedCriteria.simpleDateTimeTo.slice(0, 10) : '',
+                        include_daily_top_nicks: false,
+                        channel_password: normalizedChannelPassword,
+                    },
+                    {
+                        onChunk: ({payload}) => applyMiniStats(payload),
+                    }
+                ).then(applyMiniStats).catch(() => null)
                 : Promise.resolve(null);
 
             let data;
@@ -1868,10 +1886,22 @@ export default function SearchPage() {
                     date_to: effectiveTo ? effectiveTo.slice(0, 10) : '',
                     channel_password: normalizedChannelPassword,
                 };
-                data = await getLogStatistics(apiKey, {
-                    ...statsRequestPayload,
-                    include_daily_top_nicks: false,
-                });
+                data = await getLogStatistics(
+                    apiKey,
+                    {
+                        ...statsRequestPayload,
+                        include_daily_top_nicks: false,
+                    },
+                    {
+                        onChunk: ({payload}) => {
+                            if (requestSeq !== searchRequestSeqRef.current) return;
+                            setResults({
+                                ...payload,
+                                view_mode: normalizedCriteria.mode,
+                            });
+                        },
+                    }
+                );
                 const nextResults = {
                     ...data,
                     view_mode: normalizedCriteria.mode,
@@ -2693,11 +2723,23 @@ export default function SearchPage() {
                         </div>
                         <div className="stats-card">
                             <div className="stats-label">Loaded</div>
-                            <div className="stats-value">{loading ? '…' : 'Ready'}</div>
+                            <div className="stats-value">
+                                {loading
+                                    ? (searchSummary?.chunking?.enabled
+                                        ? `${Number(searchSummary.chunking.chunksLoaded || 0)}/${Number(searchSummary.chunking.chunkCount || 0)}`
+                                        : '…')
+                                    : 'Ready'}
+                            </div>
                         </div>
                     </div>
                     {(searchSummary.firstSeen || searchSummary.lastSeen) && (
                         <small>{searchSummary.firstSeen || 'n/a'} → {searchSummary.lastSeen || 'n/a'}</small>
+                    )}
+                    {searchSummary?.chunking?.enabled && (
+                        <small>
+                            Date span is chunked: {Number(searchSummary.chunking.chunksLoaded || 0)}/{Number(searchSummary.chunking.chunkCount || 0)} loaded
+                            {searchSummary.chunking.isPartial ? ' (partial)' : ''}.
+                        </small>
                     )}
                 </div>
             )}
@@ -2738,8 +2780,13 @@ export default function SearchPage() {
                             </div>
                             {results?.stats_chunking?.enabled && (
                                 <div className="readonly-banner">
-                                    Broad date interval was split into {Number(results.stats_chunking.chunk_count || 0)} chunks.
-                                    Unique/top-nick stats may be approximate in this mode.
+                                    Broad date interval was split into {Number(results.stats_chunking.chunk_count || 0)} chunks
+                                    {Number(results.stats_chunking.chunks_loaded || 0) > 0
+                                        ? ` (${Number(results.stats_chunking.chunks_loaded || 0)} loaded)`
+                                        : ''}.
+                                    {results.stats_chunking.is_partial
+                                        ? ' Loading partial stats in chronological chunk order.'
+                                        : ' Unique/top-nick stats may be approximate in this mode.'}
                                 </div>
                             )}
 
