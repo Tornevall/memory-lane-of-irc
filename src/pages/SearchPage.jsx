@@ -263,52 +263,185 @@ function buildSearchParamsFromCriteria(criteria) {
     return params.toString();
 }
 
+function toBase64Url(value) {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(String(value || ''));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromBase64Url(value) {
+    const token = String(value || '').trim();
+    if (!token) return '';
+    const padded = token + '==='.slice((token.length + 3) % 4);
+    const binary = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    const decoder = new TextDecoder();
+    return decoder.decode(bytes);
+}
+
+function buildShareTokenFromCriteria(criteria) {
+    const payload = {
+        v: 1,
+        m: String(criteria?.mode || 'simple'),
+        rv: criteria?.resultView === 'refined' ? 'refined' : undefined,
+        q: String(criteria?.query || '').trim() || undefined,
+        i: String(criteria?.includeTerms || '').trim() || undefined,
+        x: String(criteria?.excludeTerms || '').trim() || undefined,
+        n: String(criteria?.networkId || '').trim() || undefined,
+        c: String(criteria?.channelId || '').trim() || undefined,
+        l: normalizePageSize(criteria?.limit || DEFAULT_PAGE_SIZE),
+        p: Number.parseInt(String(criteria?.page || 1), 10) || 1,
+        sf: String(criteria?.simpleDateTimeFrom || '').trim() || undefined,
+        st: String(criteria?.simpleDateTimeTo || '').trim() || undefined,
+        qs: normalizeAdvancedQueryScope(criteria?.queryScope || 'all'),
+        nk: String(criteria?.nick || '').trim() || undefined,
+        us: String(criteria?.user || '').trim() || undefined,
+        hs: String(criteria?.host || '').trim() || undefined,
+        df: String(criteria?.dateFrom || '').trim() || undefined,
+        dt: String(criteria?.dateTo || '').trim() || undefined,
+        et: normalizeEventTypes(criteria?.eventTypes).join(',') || undefined,
+        f: String(criteria?.focusId || '').trim() || undefined,
+    };
+
+    if (payload.m === 'simple') {
+        delete payload.qs;
+        delete payload.nk;
+        delete payload.us;
+        delete payload.hs;
+        delete payload.df;
+        delete payload.dt;
+    }
+    if (payload.m !== 'advanced') {
+        delete payload.qs;
+        delete payload.nk;
+        delete payload.us;
+        delete payload.hs;
+        delete payload.df;
+        delete payload.dt;
+    }
+    if (payload.m !== 'simple' && payload.m !== 'statistics') {
+        delete payload.sf;
+        delete payload.st;
+    }
+    if (payload.rv !== 'refined') {
+        delete payload.rv;
+    }
+    if (payload.l === DEFAULT_PAGE_SIZE) {
+        delete payload.l;
+    }
+    if (payload.p === 1) {
+        delete payload.p;
+    }
+    if (payload.qs === 'all') {
+        delete payload.qs;
+    }
+    if (!payload.et) {
+        delete payload.et;
+    }
+
+    return toBase64Url(JSON.stringify(payload));
+}
+
+function parseCriteriaFromShareToken(token) {
+    const raw = String(token || '').trim();
+    if (!raw) return null;
+    try {
+        const decoded = fromBase64Url(raw);
+        const payload = JSON.parse(decoded);
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+        const mode = ['simple', 'advanced', 'statistics'].includes(String(payload.m || '').trim().toLowerCase())
+            ? String(payload.m).trim().toLowerCase()
+            : 'simple';
+        return {
+            mode,
+            resultView: payload.rv === 'refined' ? 'refined' : 'classic',
+            query: String(payload.q || ''),
+            includeTerms: String(payload.i || ''),
+            excludeTerms: String(payload.x || ''),
+            networkId: String(payload.n || ''),
+            channelId: String(payload.c || ''),
+            limit: normalizePageSize(payload.l || DEFAULT_PAGE_SIZE),
+            page: Math.max(1, Number.parseInt(String(payload.p || 1), 10) || 1),
+            simpleDateTimeFrom: String(payload.sf || ''),
+            simpleDateTimeTo: String(payload.st || ''),
+            queryScope: normalizeAdvancedQueryScope(payload.qs || 'all'),
+            nick: String(payload.nk || ''),
+            user: String(payload.us || ''),
+            host: String(payload.hs || ''),
+            dateFrom: String(payload.df || ''),
+            dateTo: String(payload.dt || ''),
+            eventTypes: normalizeEventTypes(String(payload.et || '')),
+            focusId: String(payload.f || ''),
+        };
+    } catch {
+        return null;
+    }
+}
+
 function parseCriteriaFromLocation(searchText) {
     const params = new URLSearchParams(String(searchText || ''));
-    const rawMode = String(params.get('mode') || '').trim().toLowerCase();
+    const shareToken = String(params.get('s') || params.get('share') || '').trim();
+    const sharedCriteria = parseCriteriaFromShareToken(shareToken);
+    const getParamOrShared = (paramName, sharedFieldName) => {
+        const direct = params.get(paramName);
+        if (direct !== null) return direct;
+        if (!sharedCriteria) return '';
+        return String(sharedCriteria?.[sharedFieldName] || '');
+    };
+    const rawMode = String(getParamOrShared('mode', 'mode') || '').trim().toLowerCase();
     const hasAdvancedFiltersInUrl = [
-        params.get('nick'),
-        params.get('user'),
-        params.get('username'),
-        params.get('host'),
-        params.get('hostname'),
-        params.get('date_from'),
-        params.get('date_to'),
+        getParamOrShared('nick', 'nick'),
+        getParamOrShared('user', 'user'),
+        getParamOrShared('username', 'user'),
+        getParamOrShared('host', 'host'),
+        getParamOrShared('hostname', 'host'),
+        getParamOrShared('date_from', 'dateFrom'),
+        getParamOrShared('date_to', 'dateTo'),
     ].some((value) => String(value || '').trim() !== '');
     const mode = ['simple', 'advanced', 'statistics'].includes(rawMode)
         ? rawMode
         : (hasAdvancedFiltersInUrl ? 'advanced' : 'simple');
-    const view = params.get('view') === 'refined' ? 'refined' : 'classic';
+    const view = (params.get('view') === 'refined' || sharedCriteria?.resultView === 'refined') ? 'refined' : 'classic';
     const rawEventTypes = params.get('event_types');
-    const legacyDate = String(params.get('date') || '').trim();
-    const simpleFromParam = params.get('from') || params.get('datetime_from') || '';
-    const simpleToParam = params.get('to') || params.get('datetime_to') || '';
+    const sharedEventTypes = normalizeEventTypes(sharedCriteria?.eventTypes || []);
+    const legacyDate = String(getParamOrShared('date', 'dateFrom') || '').trim();
+    const simpleFromParam = getParamOrShared('from', 'simpleDateTimeFrom') || getParamOrShared('datetime_from', 'simpleDateTimeFrom') || '';
+    const simpleToParam = getParamOrShared('to', 'simpleDateTimeTo') || getParamOrShared('datetime_to', 'simpleDateTimeTo') || '';
     const simpleDateTimeFrom = simpleFromParam || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? `${legacyDate}T00:00` : '');
     const simpleDateTimeTo = simpleToParam || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? `${legacyDate}T23:59` : '');
-    const advancedDateFrom = params.get('date_from') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
-    const advancedDateTo = params.get('date_to') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
-    const rawLimit = normalizePageSize(params.get('limit') || getInitialPageSize());
-    const rawPage = Number.parseInt(params.get('page') || '', 10);
+    const advancedDateFrom = getParamOrShared('date_from', 'dateFrom') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
+    const advancedDateTo = getParamOrShared('date_to', 'dateTo') || (/^\d{4}-\d{2}-\d{2}$/.test(legacyDate) ? legacyDate : '');
+    const rawLimit = normalizePageSize(getParamOrShared('limit', 'limit') || getInitialPageSize());
+    const rawPage = Number.parseInt(getParamOrShared('page', 'page') || '', 10);
     return {
         mode,
         resultView: view,
-        query: params.get('q') || params.get('query') || '',
-        includeTerms: params.get('include_terms') || '',
-        excludeTerms: params.get('exclude_terms') || '',
-        networkId: params.get('network') || params.get('network_id') || '',
-        channelId: params.get('channel') || params.get('channel_id') || '',
+        query: getParamOrShared('q', 'query') || getParamOrShared('query', 'query') || '',
+        includeTerms: getParamOrShared('include_terms', 'includeTerms') || '',
+        excludeTerms: getParamOrShared('exclude_terms', 'excludeTerms') || '',
+        networkId: getParamOrShared('network', 'networkId') || getParamOrShared('network_id', 'networkId') || '',
+        channelId: getParamOrShared('channel', 'channelId') || getParamOrShared('channel_id', 'channelId') || '',
         simpleDateTimeFrom,
         simpleDateTimeTo,
-        queryScope: normalizeAdvancedQueryScope(params.get('query_scope') || 'all'),
-        nick: params.get('nick') || '',
-        user: params.get('user') || params.get('username') || '',
-        host: params.get('host') || params.get('hostname') || '',
+        queryScope: normalizeAdvancedQueryScope(getParamOrShared('query_scope', 'queryScope') || 'all'),
+        nick: getParamOrShared('nick', 'nick') || '',
+        user: getParamOrShared('user', 'user') || getParamOrShared('username', 'user') || '',
+        host: getParamOrShared('host', 'host') || getParamOrShared('hostname', 'host') || '',
         dateFrom: advancedDateFrom,
         dateTo: advancedDateTo,
         eventTypes: rawEventTypes === null
-            ? [...DEFAULT_ACTIVE_EVENT_TYPES]
+            ? (sharedEventTypes.length > 0 ? sharedEventTypes : [...DEFAULT_ACTIVE_EVENT_TYPES])
             : normalizeEventTypes(rawEventTypes || ''),
-        focusId: params.get('focus_id') || '',
+        focusId: getParamOrShared('focus_id', 'focusId') || '',
         limit: Number.isFinite(rawLimit) && rawLimit >= 1 ? rawLimit : DEFAULT_PAGE_SIZE,
         page: Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1,
     };
@@ -1206,6 +1339,7 @@ export default function SearchPage() {
     const [statsShowEvents, setStatsShowEvents] = useState(true);
     const [statsTopNickChartType, setStatsTopNickChartType] = useState('bar');
     const [statsSelectedTopNicks, setStatsSelectedTopNicks] = useState([]);
+    const [shortcutStatus, setShortcutStatus] = useState('');
     const [whoisState, setWhoisState] = useState({
         open: false,
         nick: '',
@@ -1217,6 +1351,7 @@ export default function SearchPage() {
     const channelsCacheRef = useRef(new Map());
     const nickSuggestionSeqRef = useRef(0);
     const searchRequestSeqRef = useRef(0);
+    const shortcutStatusTimerRef = useRef(null);
     const lastLogCriteriaRef = useRef(null);
     const lastLogResultsRef = useRef(null);
     const readSource = getReadSource();
@@ -1701,6 +1836,65 @@ export default function SearchPage() {
             target.scrollIntoView({block: 'center'});
         }
     }, [results]);
+
+    useEffect(() => () => {
+        if (shortcutStatusTimerRef.current) {
+            clearTimeout(shortcutStatusTimerRef.current);
+        }
+    }, []);
+
+    function setShortcutStatusMessage(message) {
+        if (shortcutStatusTimerRef.current) {
+            clearTimeout(shortcutStatusTimerRef.current);
+        }
+        setShortcutStatus(String(message || ''));
+        shortcutStatusTimerRef.current = setTimeout(() => {
+            setShortcutStatus('');
+            shortcutStatusTimerRef.current = null;
+        }, 3500);
+    }
+
+    async function handleCreateShortcut() {
+        try {
+            const token = buildShareTokenFromCriteria({
+                mode,
+                resultView,
+                query,
+                queryScope,
+                includeTerms,
+                excludeTerms,
+                networkId,
+                channelId,
+                simpleDateTimeFrom,
+                simpleDateTimeTo,
+                nick,
+                user,
+                host,
+                dateFrom,
+                dateTo,
+                eventTypes,
+                limit,
+                page,
+            });
+            const shortUrl = `${window.location.origin}${window.location.pathname}?s=${encodeURIComponent(token)}`;
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(shortUrl);
+            } else {
+                const temp = document.createElement('textarea');
+                temp.value = shortUrl;
+                temp.setAttribute('readonly', 'readonly');
+                temp.style.position = 'absolute';
+                temp.style.left = '-9999px';
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+            }
+            setShortcutStatusMessage('Shortcut copied');
+        } catch {
+            setShortcutStatusMessage('Failed to create shortcut');
+        }
+    }
 
     async function executeSearch(criteria, options = {}) {
         const apiKey = getApiKey();
@@ -2994,6 +3188,10 @@ export default function SearchPage() {
                                     {results.page && ` (page ${results.page})`}
                                 </div>
                                 <div className="results-controls">
+                                    <button type="button" className="btn-secondary" onClick={handleCreateShortcut}>
+                                        Create shortcut
+                                    </button>
+                                    {shortcutStatus && <small className="text-muted">{shortcutStatus}</small>}
                                     <label className="anchor-link-toggle"
                                            title="Include q/query search terms in # anchors">
                                         <input
