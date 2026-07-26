@@ -13,6 +13,7 @@ import {
     simpleSearch,
 } from '../services/api';
 import { getApiKey } from '../services/apiKey';
+import ImportDisclaimer from '../components/ImportDisclaimer';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 500, 1000];
 const DEFAULT_PAGE_SIZE = 100;
@@ -2275,6 +2276,7 @@ export default function SearchPage() {
     return (
         <div className="page">
             <h1>Search IRC Logs</h1>
+            <ImportDisclaimer />
             <div className="mode-toggle">
                 <button
                     className={mode === 'simple' ? 'active' : ''}

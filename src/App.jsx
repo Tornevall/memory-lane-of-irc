@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import ApiKeyInput from './components/ApiKeyInput';
-import ImportDisclaimer from './components/ImportDisclaimer';
 import SearchPage from './pages/SearchPage';
 import HighlightsPage from './pages/HighlightsPage';
 import DocsPage from './pages/DocsPage';
@@ -50,7 +49,6 @@ export default function App() {
         </div>
       </nav>
       <main className="main-content">
-        <ImportDisclaimer />
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
