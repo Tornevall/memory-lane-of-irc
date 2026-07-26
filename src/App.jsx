@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import ApiKeyInput from './components/ApiKeyInput';
+import ImportDisclaimer from './components/ImportDisclaimer';
 import SearchPage from './pages/SearchPage';
 import HighlightsPage from './pages/HighlightsPage';
 import DocsPage from './pages/DocsPage';
