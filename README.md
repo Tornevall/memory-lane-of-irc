@@ -168,6 +168,16 @@ RUN npm run build
 
 See `/docs/irclog-api-reference` on tools.tornevall.net
 
+## Import Limitations & Data Integrity
+
+Our IRC log import process employs duplicate detection to maintain data quality. While this significantly reduces redundant entries, it may also result in the filtering of legitimate repeated content in the following scenarios:
+
+- **Minute-level precision**: Logs recorded with minute-level precision (HH:MM) only cannot distinguish between identical messages occurring at different times within the same minute. Duplicate entries occurring within the same minute may be filtered during import.
+- **Spam and flooding**: Repeated content from the same user within the same minute may be inadvertently deduplicated.
+- **Cross-import duplicates**: The same log file imported multiple times is intentionally filtered.
+
+**Recommendation**: IRC logs recorded with second-level precision (HH:MM:SS) will experience significantly fewer false-positive duplicates and provide more complete event coverage. For archival completeness, consider logs with sub-minute timestamp granularity.
+
 ## Important: Production vs Staging
 
 **Remember:**

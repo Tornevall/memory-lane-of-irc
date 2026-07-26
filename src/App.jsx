@@ -49,6 +49,7 @@ export default function App() {
         </div>
       </nav>
       <main className="main-content">
+        <ImportDisclaimer />
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/highlights" element={<HighlightsPage />} />
