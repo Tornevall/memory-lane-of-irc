@@ -1,14 +1,36 @@
+import { getApiBaseUrl } from '../services/api';
+
 export default function DocsPage() {
+  const apiBaseUrl = getApiBaseUrl();
+  const ircApiReferenceUrl = 'https://tools.tornevall.net/docs/irclog-api-reference';
+  const ircApiGuideUrl = 'https://tools.tornevall.net/docs/irclog-api-guide';
+
   return (
     <div className="page docs-page">
       <h1>API Documentation</h1>
       <p className="docs-intro">
-        Base URL: <code>https://tools.tornevall.com</code>
+        Base URL:{' '}
+        <a className="docs-base-link" href={apiBaseUrl} target="_blank" rel="noreferrer">
+          {apiBaseUrl}
+        </a>
       </p>
+      <div className="docs-link-row">
+        <span className="docs-intro docs-links-label">Documentation:</span>
+        <span className="docs-intro docs-links-label">Current page: {ircApiReferenceUrl}</span>
+        <a className="docs-link-chip" href={ircApiGuideUrl} target="_blank" rel="noreferrer">
+          tools.tornevall.net/docs/irclog-api-guide
+        </a>
+      </div>
 
       <section className="docs-section">
         <h2>Authentication</h2>
-        <p>All requests require a Bearer token in the Authorization header:</p>
+        <p>
+          API key is optional for read endpoints (readonly mode). Write endpoints require a Bearer token:
+        </p>
+        <p>
+          On trusted hosts (<code>tools.tornevall.com</code> and <code>tools.tornevall.net</code>), the frontend
+          auto-detects relaxed mode where API key is optional.
+        </p>
         <pre><code>{`Authorization: Bearer YOUR_API_KEY`}</code></pre>
       </section>
 
@@ -23,7 +45,7 @@ export default function DocsPage() {
 
       <section className="docs-section">
         <h2>Simple Search</h2>
-        <p><span className="method get">GET</span> <code>/api/irclog/search</code></p>
+        <p><span className="method get">GET</span> <code>/irc/api/logs</code></p>
         <h3>Query Parameters</h3>
         <table className="params-table">
           <thead>
@@ -35,14 +57,14 @@ export default function DocsPage() {
           </tbody>
         </table>
         <h3>Example Request</h3>
-        <pre><code>{`curl -H "Authorization: Bearer YOUR_KEY" \\
-  "https://tools.tornevall.com/api/irclog/search?q=hello&channel_id=123"`}</code></pre>
+        <pre><code>{`curl \\
+  "${apiBaseUrl}/irc/api/logs?q=hello&channel_id=123&source=production"`}</code></pre>
       </section>
 
       <section className="docs-section">
         <h2>Advanced Search</h2>
-        <p><span className="method post">POST</span> <code>/api/irclog/search</code></p>
-        <h3>Request Body</h3>
+        <p><span className="method get">GET</span> <code>/irc/api/logs</code></p>
+        <h3>Supported Parameters</h3>
         <pre><code>{`{
   "query": "php mysql",
   "channel_id": 123,
@@ -53,11 +75,8 @@ export default function DocsPage() {
   "page": 1
 }`}</code></pre>
         <h3>Example Request</h3>
-        <pre><code>{`curl -X POST \\
-  -H "Authorization: Bearer YOUR_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"query":"php mysql","nick":"Robin","limit":10}' \\
-  "https://tools.tornevall.com/api/irclog/search"`}</code></pre>
+        <pre><code>{`curl \\
+  "${apiBaseUrl}/irc/api/logs?q=php+mysql&nick=Robin&limit=10&page=1&source=production"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "results": [
@@ -81,8 +100,8 @@ export default function DocsPage() {
         <h2>Get Highlights</h2>
         <p><span className="method get">GET</span> <code>/api/irclog/highlights</code></p>
         <h3>Example Request</h3>
-        <pre><code>{`curl -H "Authorization: Bearer YOUR_KEY" \\
-  "https://tools.tornevall.com/api/irclog/highlights"`}</code></pre>
+        <pre><code>{`curl \\
+  "${apiBaseUrl}/api/irclog/highlights"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "highlights": [
@@ -115,7 +134,7 @@ export default function DocsPage() {
   -H "Authorization: Bearer YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"log_event_id":12345,"title":"Great quote","is_public":true}' \\
-  "https://tools.tornevall.com/api/irclog/highlights"`}</code></pre>
+  "${apiBaseUrl}/api/irclog/highlights"`}</code></pre>
         <h3>Response</h3>
         <pre><code>{`{
   "id": 789,

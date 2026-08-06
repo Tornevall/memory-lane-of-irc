@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getHighlights, createHighlight, getEffectiveApiKey } from '../services/api';
-
-function getApiKey() {
-  return getEffectiveApiKey();
-}
+import { getHighlights, createHighlight, getPermalinkUrl } from '../services/api';
+import { hasWriteAccess, isTrustedNoKeyHost } from '../services/authMode';
+import { getApiKey } from '../services/apiKey';
 
 export default function HighlightsPage() {
+  const apiKey = getApiKey();
+  const trustedNoKeyHost = isTrustedNoKeyHost();
+  const canWrite = hasWriteAccess(apiKey);
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,18 +20,19 @@ export default function HighlightsPage() {
   const [createSuccess, setCreateSuccess] = useState('');
 
   async function fetchHighlights() {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setError('Please enter and save your API key first.');
-      return;
-    }
     setLoading(true);
     setError('');
     try {
       const data = await getHighlights(apiKey);
       setHighlights(data.highlights || []);
     } catch (err) {
-      setError(err.message);
+      const msg = String(err.message || '');
+      if (!apiKey && /auth|required|unauthorized|forbidden/i.test(msg)) {
+        setError('Read access denied by backend for anonymous mode.');
+        setHighlights([]);
+      } else {
+        setError(msg || 'Failed to fetch highlights.');
+      }
     } finally {
       setLoading(false);
     }
@@ -42,9 +44,8 @@ export default function HighlightsPage() {
 
   async function handleCreate(e) {
     e.preventDefault();
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setCreateError('Please enter and save your API key first.');
+    if (!canWrite) {
+      setCreateError('Readonly mode active. Set VITE_IRC_API_KEY in .env to create highlights/comments.');
       return;
     }
     setCreating(true);
@@ -74,10 +75,26 @@ export default function HighlightsPage() {
     <div className="page">
       <div className="page-header">
         <h1>Highlights</h1>
-        <button className="btn-primary" onClick={() => setShowForm(!showForm)}>
+        <button
+          className="btn-primary"
+          onClick={() => setShowForm(!showForm)}
+          disabled={!canWrite}
+          title={!canWrite ? 'Readonly mode: add API key for write access.' : ''}
+        >
           {showForm ? 'Cancel' : '+ New Highlight'}
         </button>
       </div>
+
+      {!canWrite && (
+        <div className="readonly-banner">
+          Readonly mode: browsing is allowed. Configure VITE_IRC_API_KEY in .env for writing highlights/comments.
+        </div>
+      )}
+      {trustedNoKeyHost && !apiKey && (
+        <div className="success-banner">
+          Trusted host mode active: API key is not required on this host.
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="search-form highlight-form">
@@ -152,7 +169,7 @@ export default function HighlightsPage() {
             )}
             {h.permalink && (
               <a
-                href={`https://tools.tornevall.com${h.permalink}`}
+                href={getPermalinkUrl(h.permalink)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="permalink"
